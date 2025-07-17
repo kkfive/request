@@ -46,9 +46,6 @@ catalogs:
     ky:
       specifier: ^1.8.1
       version: 1.8.1
-    mitt:
-      specifier: ^3.0.1
-      version: 3.0.1
     qs:
       specifier: ^6.14.0
       version: 6.14.0
@@ -85,9 +82,6 @@ importers:
       ky:
         specifier: 'catalog:'
         version: 1.8.1
-      mitt:
-        specifier: 'catalog:'
-        version: 3.0.1
       qs:
         specifier: 'catalog:'
         version: 6.14.0
@@ -2026,9 +2020,6 @@ packages:
   minimatch@9.0.5:
     resolution: {integrity: sha512-G6T0ZX48xgozx7587koeX9Ys2NYy6Gmv//P89sEte9V9whIapMNF4idKxnW2QtCcLiTWlb/wfCabAtAFWhhBow==}
     engines: {node: '>=16 || 14 >=14.17'}
-
-  mitt@3.0.1:
-    resolution: {integrity: sha512-vKivATfr97l2/QBCYAkXYDbrIWPM2IIKEl7YPhjCvKlG3kE2gm+uBo6nEXK3M5/Ffh/FLpKExzOQ3JJoJGFKBw==}
 
   mkdist@2.3.0:
     resolution: {integrity: sha512-thkRk+pHdudjdZT3FJpPZ2+pncI6mGlH/B+KBVddlZj4MrFGW41sRIv1wZawZUHU8v7cttGaj+5nx8P+dG664A==}
@@ -4956,8 +4947,6 @@ snapshots:
   minimatch@9.0.5:
     dependencies:
       brace-expansion: 2.0.2
-
-  mitt@3.0.1: {}
 
   mkdist@2.3.0(typescript@5.8.2):
     dependencies:

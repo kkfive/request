@@ -4,6 +4,25 @@ import { isFunction } from 'es-toolkit'
 import { RequestError } from '../errors/app-error'
 
 interface ResponseParserData {
+  /**
+   * 指定响应返回的处理方式。
+   * @default 'body'
+   * @example raw
+   * 返回原始的 `Response` 实例；
+   * 不解析 JSON；
+   * 不进行 HTTP 状态码或业务 code 检查；
+   * 适合调用方手动处理响应，例如用于下载文件、获取 headers 等。
+   * @example body
+   * 自动将响应解析为 JSON 并返回完整结构（如 `{ code, msg, data }`）；
+   * 只校验 HTTP 状态码为 2xx；
+   * 不检查业务 code 成功状态；
+   * 适合调用方自行判断业务逻辑是否成功。
+   * @example data
+   * 解析响应 JSON，并提取指定字段（默认提取 `data` 字段）；
+   * 同时校验 HTTP 状态码为 2xx 且业务 code 符合 `successCode` 要求；
+   * 不符合时抛出错误；
+   * 适合统一业务成功判定和数据提取的情况。
+   */
   responseReturn: 'data'
   /**
    * 响应体中标识业务状态码的字段名。
@@ -84,6 +103,26 @@ interface ResponseParserRaw {
 }
 
 interface ResponseParserBody {
+  /**
+   * 指定响应返回的处理方式。
+   *
+   * @default 'body'
+   * @example raw
+   * 返回原始的 `Response` 实例；
+   * 不解析 JSON；
+   * 不进行 HTTP 状态码或业务 code 检查；
+   * 适合调用方手动处理响应，例如用于下载文件、获取 headers 等。
+   * @example body
+   * 自动将响应解析为 JSON 并返回完整结构（如 `{ code, msg, data }`）；
+   * 只校验 HTTP 状态码为 2xx；
+   * 不检查业务 code 成功状态；
+   * 适合调用方自行判断业务逻辑是否成功。
+   * @example data
+   * 解析响应 JSON，并提取指定字段（默认提取 `data` 字段）；
+   * 同时校验 HTTP 状态码为 2xx 且业务 code 符合 `successCode` 要求；
+   * 不符合时抛出错误；
+   * 适合统一业务成功判定和数据提取的情况。
+   */
   responseReturn: 'body'
 }
 
@@ -94,19 +133,21 @@ type ResponseParserOptions = ResponseParserData | ResponseParserBody | ResponseP
 function createResponseParserHook(responseReturnConfig: ResponseParserOptions): AfterResponseHook {
   const { responseReturn = 'raw' } = responseReturnConfig
   return async (_request, options, response) => {
-    const _response = response.clone()
-    const _options = options as RequestOption
-    const json: any = await _response.json()
-
-    if (!response.ok) {
-      const { message, code } = formatNetworkError(_response)
-      throw new RequestError(message, { code, raw: json, response, isBusinessError: false })
-    }
-
     // 不处理任何内容，直接返回原始 Response
     if (!responseReturn || responseReturn === 'raw') {
       return response
     }
+
+    const _response = response.clone()
+    const _options = options as RequestOption
+
+    if (!response.ok) {
+      const { message, code } = formatNetworkError(_response)
+      throw new RequestError(message, { code, raw: await _response.json().catch(() => ({})), response, isBusinessError: false })
+    }
+
+    // 解析 JSON，只在需要时执行
+    const json: any = await _response.json()
 
     // 如果仅要求返回整个响应 JSON
     if (responseReturn === 'body') {

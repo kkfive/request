@@ -1,9 +1,9 @@
 /* eslint-disable no-console */
 import type { RequestError } from '../src'
-import { Request } from '../src'
+import { Request, to } from '../src'
 
 const request = new Request({
-  prefixUrl: 'http://127.0.0.1:4523/m1/3188536-1836903-default/',
+  prefixUrl: 'http://127.0.0.1:4523/m1/3188536-1836903-default',
   makeErrorMessage(message) {
     console.error(`「makeErrorMessage」=>message:${message}`)
   },
@@ -25,32 +25,25 @@ const request = new Request({
   },
 })
 
-async function success(url = 'success'): Promise<any> {
-  const result = await request.get(url)
-  console.log(`「客户端success请求」=>result:`, result)
+async function baseRequest(name: string, url: string): Promise<any> {
+  const [error, result] = await to(request.get(url))
+  if (error) {
+    const _error = error as RequestError
+    console.error(`「客户端${name}请求Error」=> errorName:${_error.name};code:${_error.code}`, _error.message, _error.raw)
+    return
+  }
+  console.log(`「客户端${name}请求」=>result:`, result)
   return result
 }
-async function errorBusiness(url = 'error/business/500'): Promise<any> {
-  try {
-    const result = await request.get(url)
-    console.log(`「客户端errorBusiness请求」=>result:`, result)
-    return result
-  }
-  catch (error) {
-    const _error = error as RequestError
-    console.error(`「客户端errorBusiness请求Error」=> errorName:${_error.name};code:${_error.code}`, _error.message, _error.raw)
-  }
+
+async function success(url = '/success'): Promise<any> {
+  return baseRequest('success', url)
 }
-async function errorNetwork(url = 'error/http/500'): Promise<any> {
-  try {
-    const result = await request.get(url)
-    console.log(`「客户端errorNetwork请求」=>result:`, result)
-    return result
-  }
-  catch (error) {
-    const _error = error as RequestError
-    console.error(`「客户端errorNetwork请求Error」=> errorName:${_error.name};code:${_error.code}`, _error.message, _error.raw)
-  }
+async function errorBusiness(url = '/error/business/500'): Promise<any> {
+  return baseRequest('errorBusiness', url)
+}
+async function errorNetwork(url = '/error/http/500'): Promise<any> {
+  return baseRequest('errorNetwork', url)
 }
 
 async function main(): Promise<void> {
@@ -60,6 +53,6 @@ async function main(): Promise<void> {
   console.log('----------------------------------')
   await errorNetwork()
   console.log('----------------------------------')
-  await errorNetwork('error/http/500-empty')
+  await errorNetwork('/error/http/500-empty')
 }
 main()

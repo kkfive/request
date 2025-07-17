@@ -10,7 +10,9 @@ const paramsSerializerHook: BeforeRequestHook = (request, options) => {
     })
     const url = new URL(request.url)
     url.search = search
-    Object.defineProperty(request, 'url', { value: url.toString() })
+
+    // 返回一个新的 Request 实例，而不是修改原有的
+    return new Request(url.toString(), request)
   }
 }
 export { paramsSerializerHook }

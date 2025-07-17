@@ -40,7 +40,6 @@
   "peerDependencies": {
     "es-toolkit": "catalog:",
     "ky": "catalog:",
-    "mitt": "catalog:",
     "qs": "catalog:"
   },
   "devDependencies": {
