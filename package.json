@@ -6,6 +6,12 @@
   "description": "A self-used request encapsulation",
   "author": "DreamyTZK",
   "license": "MIT",
+  "homepage": "https://github.com/kkfive/request#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kkfive/request.git"
+  },
+  "bugs": "https://github.com/kkfive/request/issues",
   "keywords": [],
   "sideEffects": false,
   "exports": {
