@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest'
+import { Request, RequestError, to } from '../src'
 
-describe('should', () => {
-  it('exported', () => {
-    expect(1).toEqual(1)
+describe('exports', () => {
+  it('should export Request class', () => {
+    expect(Request).toBeDefined()
+    expect(typeof Request).toBe('function')
+  })
+
+  it('should export RequestError class', () => {
+    expect(RequestError).toBeDefined()
+    expect(typeof RequestError).toBe('function')
+  })
+
+  it('should export to function', () => {
+    expect(to).toBeDefined()
+    expect(typeof to).toBe('function')
   })
 })

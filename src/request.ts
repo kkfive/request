@@ -1,10 +1,10 @@
 import type { KyInstance } from 'ky'
 import type { RequestError } from './errors/app-error'
 import type { RequestOption } from './type'
-import { merge } from 'es-toolkit'
 import ky, { HTTPError } from 'ky'
 import { paramsSerializerHook } from './modules/params-serializer-hook'
 import { createResponseParserHook } from './modules/response'
+import { merge } from './utils/merge'
 
 class Request {
   private readonly instance: KyInstance
@@ -27,7 +27,7 @@ class Request {
     // 插入 response 解析 hook（如果提供）
     if (requestOption?.responseParser) {
       requestConfig.hooks.afterResponse = [
-        createResponseParserHook(requestOption.responseParser),
+        createResponseParserHook(),
         ...(requestConfig.hooks.afterResponse ?? []),
       ]
     }
@@ -91,6 +91,7 @@ class Request {
     }
     catch (error: unknown) {
       const makeErrorMessage = config.makeErrorMessage || this.requestOption.makeErrorMessage
+
       if (error instanceof HTTPError) {
         // 这是 ky 抛出的 HTTP 错误 (如 404, 500)
         // 你可以从 error.response 中获取到 Response 对象
@@ -104,8 +105,6 @@ class Request {
         // 对于非 HTTPError，可能没有 _error.response
         makeErrorMessage?.(error.message, error as RequestError)
       }
-      // const makeErrorMessage = config.makeErrorMessage || this.requestOption.makeErrorMessage
-      // makeErrorMessage?.(_error.message, _error)
       throw error
     }
   }

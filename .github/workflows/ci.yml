@@ -51,3 +51,5 @@ jobs:
       - run: nci
       - run: nr build
       - run: nr test
+        env:
+          PREFIX_URL: ${{ secrets.PREFIX_URL }}

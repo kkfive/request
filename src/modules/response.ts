@@ -1,7 +1,7 @@
 import type { AfterResponseHook } from 'ky'
 import type { RequestOption } from '../type'
-import { isFunction } from 'es-toolkit'
 import { RequestError } from '../errors/app-error'
+import { isFunction } from '../utils/isFunction'
 
 interface ResponseParserData {
   /**
@@ -130,20 +130,27 @@ type ResponseParserOptions = ResponseParserData | ResponseParserBody | ResponseP
 /**
  * 创建一个用于解析 ky 响应的 hook。
  */
-function createResponseParserHook(responseReturnConfig: ResponseParserOptions): AfterResponseHook {
-  const { responseReturn = 'raw' } = responseReturnConfig
+function createResponseParserHook(): AfterResponseHook {
   return async (_request, options, response) => {
+    const _options = options as RequestOption
+    const responseReturnConfig = _options?.responseParser
+    const { responseReturn = 'raw' } = responseReturnConfig ?? {}
     // 不处理任何内容，直接返回原始 Response
     if (!responseReturn || responseReturn === 'raw') {
       return response
     }
 
     const _response = response.clone()
-    const _options = options as RequestOption
 
     if (!response.ok) {
       const { message, code } = formatNetworkError(_response)
-      throw new RequestError(message, { code, raw: await _response.json().catch(() => ({})), response, isBusinessError: false })
+      throw new RequestError(message, {
+        code,
+        response,
+        raw: await _response.json().catch(() => ({})),
+        isBusinessError: false,
+        options: _options,
+      })
     }
 
     // 解析 JSON，只在需要时执行
@@ -168,7 +175,13 @@ function createResponseParserHook(responseReturnConfig: ResponseParserOptions): 
 
       const errorCode = json?.[errorCodeField ?? codeField]
 
-      throw new RequestError(errorMsg, { code: errorCode, raw: json, response })
+      throw new RequestError(errorMsg, {
+        isBusinessError: false,
+        options: _options,
+        code: errorCode,
+        raw: json,
+        response,
+      })
     }
 
     const data = isFunction(dataField)
@@ -180,7 +193,7 @@ function createResponseParserHook(responseReturnConfig: ResponseParserOptions): 
 }
 
 function formatNetworkError(response: Response): { message: string, code: number } {
-  let message = ''
+  let message
   const status = response.status
   switch (status) {
     case 400:

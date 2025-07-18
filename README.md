@@ -3,7 +3,6 @@
 这是个人自用的二次请求封装，主要用于应对个人在项目中的前端请求场景。
 
 该请求库基于[ky](https://github.com/sindresorhus/ky)进行二次封装，但同时依赖于如下依赖：
-- [es-toolkit](https://github.com/toss/es-toolkit)
 - [qs](https://github.com/ljharb/qs)
 
 ## 功能示例
