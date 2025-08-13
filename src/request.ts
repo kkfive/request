@@ -110,3 +110,4 @@ class Request {
   }
 }
 export { Request }
+export type { RequestOption }
