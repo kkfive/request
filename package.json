@@ -2,7 +2,7 @@
   "name": "@kkfive/request",
   "type": "module",
   "version": "0.1.1",
-  "packageManager": "pnpm@10.6.2",
+  "packageManager": "pnpm@10.21.0",
   "description": "A self-used request encapsulation",
   "author": "DreamyTZK",
   "license": "MIT",
@@ -34,7 +34,8 @@
     "start:example": "tsx examples/index.ts",
     "test": "vitest --run",
     "typecheck": "tsc --noEmit",
-    "prepare": "simple-git-hooks"
+    "prepare": "simple-git-hooks",
+    "update:deps": "npx taze -r -w"
   },
   "peerDependencies": {
     "ky": "catalog:",
