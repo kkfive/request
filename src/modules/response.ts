@@ -3,130 +3,45 @@ import type { RequestOption } from '../type'
 import { RequestError } from '../errors/app-error'
 import { isFunction } from '../utils/isFunction'
 
-interface ResponseParserData {
-  /**
-   * 指定响应返回的处理方式。
-   * @default 'body'
-   * @example raw
-   * 返回原始的 `Response` 实例；
-   * 不解析 JSON；
-   * 不进行 HTTP 状态码或业务 code 检查；
-   * 适合调用方手动处理响应，例如用于下载文件、获取 headers 等。
-   * @example body
-   * 自动将响应解析为 JSON 并返回完整结构（如 `{ code, msg, data }`）；
-   * 只校验 HTTP 状态码为 2xx；
-   * 不检查业务 code 成功状态；
-   * 适合调用方自行判断业务逻辑是否成功。
-   * @example data
-   * 解析响应 JSON，并提取指定字段（默认提取 `data` 字段）；
-   * 同时校验 HTTP 状态码为 2xx 且业务 code 符合 `successCode` 要求；
-   * 不符合时抛出错误；
-   * 适合统一业务成功判定和数据提取的情况。
-   */
-  responseReturn: 'data'
-  /**
-   * 响应体中标识业务状态码的字段名。
-   *
-   * 常见为 `'code'`、`'statusCode'`、`'success'` 等。
-   * 仅当 `responseReturn` 为 `'data'` 时生效。
-   *
-   * @default 'code'
-   */
-  codeField: string
-
-  /**
-   * 响应体中实际数据的字段名，或用于自定义提取逻辑的函数。
-   *
-   * - 如果为字符串，例如 `'data'`、`'result'`，将提取该字段作为最终返回；
-   * - 如果为函数，将传入完整响应体并返回需要的数据片段；
-   *
-   * 仅当 `responseReturn` 为 `'data'` 时生效。
-   *
-   * @default 'data'
-   */
-  dataField: string | ((res: any) => any)
-
-  /**
-   * 代表接口成功状态的 code 值，或用于判断成功的函数。
-   *
-   * - 数值或字符串：代表固定的成功状态码；
-   * - 函数：接收实际 code 值并返回是否为成功；
-   *
-   * 仅当 `responseReturn` 为 `'data'` 时生效。
-   *
-   * @default 0
-   */
-  successCode: number | string | ((code: any) => boolean)
-
-  /**
-   * 失败响应中，业务错误码所在字段名。
-   * 用于赋值 `AppError.code` 字段。
-   *
-   * @default same as codeField
-   */
-  errorCodeField: string
-
-  /**
-   * 失败响应中，业务错误信息所在字段名或提取函数。
-   * 用于赋值 `AppError.message`。
-   *
-   * @default 'message'
-   */
-  errorMessageField: string | ((res: any) => string)
-}
 /**
- * 配置响应解析行为的选项，用于控制请求返回值的格式与成功判断逻辑。
+ * 配置响应解析行为的选项
+ *
+ * 支持三种响应返回模式：
+ * - `raw`: 返回原始 Response 实例，不解析 JSON，不进行任何检查。适合文件下载、获取 headers 等场景
+ * - `body`: 解析为 JSON 并返回完整结构（如 `{ code, msg, data }`），只校验 HTTP 状态码。适合自行判断业务逻辑
+ * - `data`: 解析 JSON 并提取指定字段（默认 `data`），校验 HTTP 状态码和业务 code。适合统一业务成功判定
  */
-interface ResponseParserRaw {
-  /**
-   * 指定响应返回的处理方式。
-   *
-   * @default 'body'
-   * @example raw
-   * 返回原始的 `Response` 实例；
-   * 不解析 JSON；
-   * 不进行 HTTP 状态码或业务 code 检查；
-   * 适合调用方手动处理响应，例如用于下载文件、获取 headers 等。
-   * @example body
-   * 自动将响应解析为 JSON 并返回完整结构（如 `{ code, msg, data }`）；
-   * 只校验 HTTP 状态码为 2xx；
-   * 不检查业务 code 成功状态；
-   * 适合调用方自行判断业务逻辑是否成功。
-   * @example data
-   * 解析响应 JSON，并提取指定字段（默认提取 `data` 字段）；
-   * 同时校验 HTTP 状态码为 2xx 且业务 code 符合 `successCode` 要求；
-   * 不符合时抛出错误；
-   * 适合统一业务成功判定和数据提取的情况。
-   */
-  responseReturn: 'raw'
-
-}
-
-interface ResponseParserBody {
-  /**
-   * 指定响应返回的处理方式。
-   *
-   * @default 'body'
-   * @example raw
-   * 返回原始的 `Response` 实例；
-   * 不解析 JSON；
-   * 不进行 HTTP 状态码或业务 code 检查；
-   * 适合调用方手动处理响应，例如用于下载文件、获取 headers 等。
-   * @example body
-   * 自动将响应解析为 JSON 并返回完整结构（如 `{ code, msg, data }`）；
-   * 只校验 HTTP 状态码为 2xx；
-   * 不检查业务 code 成功状态；
-   * 适合调用方自行判断业务逻辑是否成功。
-   * @example data
-   * 解析响应 JSON，并提取指定字段（默认提取 `data` 字段）；
-   * 同时校验 HTTP 状态码为 2xx 且业务 code 符合 `successCode` 要求；
-   * 不符合时抛出错误；
-   * 适合统一业务成功判定和数据提取的情况。
-   */
-  responseReturn: 'body'
-}
-
-type ResponseParserOptions = ResponseParserData | ResponseParserBody | ResponseParserRaw
+type ResponseParserOptions
+  = | { responseReturn: 'raw' }
+    | { responseReturn: 'body' }
+    | {
+      responseReturn: 'data'
+      /**
+       * 响应体中标识业务状态码的字段名
+       * @default 'code'
+       */
+      codeField?: string
+      /**
+       * 响应体中实际数据的字段名或提取函数
+       * @default 'data'
+       */
+      dataField?: string | ((res: any) => any)
+      /**
+       * 代表接口成功状态的 code 值或判断函数
+       * @default 0
+       */
+      successCode?: number | string | ((code: any) => boolean)
+      /**
+       * 失败响应中，业务错误码所在字段名
+       * @default same as codeField
+       */
+      errorCodeField?: string
+      /**
+       * 失败响应中，业务错误信息所在字段名或提取函数
+       * @default 'message'
+       */
+      errorMessageField?: string | ((res: any) => string)
+    }
 /**
  * 创建一个用于解析 ky 响应的 hook。
  */
@@ -140,28 +55,77 @@ function createResponseParserHook(): AfterResponseHook {
       return response
     }
 
-    const _response = response.clone()
+    // 克隆响应以便多次读取
+    let _response: Response
+    try {
+      _response = response.clone()
+    }
+    catch (error) {
+      console.warn('Failed to clone response:', error)
+      _response = response
+    }
 
     if (!response.ok) {
       const { message, code } = formatNetworkError(_response)
+
+      // 尝试解析错误响应体
+      let raw: any = {}
+      try {
+        const contentType = _response.headers.get('content-type')
+        if (contentType?.includes('application/json')) {
+          raw = await _response.json()
+        }
+        else {
+          raw = { text: await _response.text() }
+        }
+      }
+      catch (error) {
+        console.warn('Failed to parse error response:', error)
+      }
+
       throw new RequestError(message, {
         code,
         response,
-        raw: await _response.json().catch(() => ({})),
+        raw,
         isBusinessError: false,
         options: _options,
       })
     }
 
     // 解析 JSON，只在需要时执行
-    const json: any = await _response.json()
+    let json: any
+    try {
+      const contentType = _response.headers.get('content-type')
+      if (!contentType?.includes('application/json')) {
+        throw new Error(`响应不是 JSON 格式，Content-Type: ${contentType || 'unknown'}`)
+      }
+      json = await _response.json()
+    }
+    catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '响应解析失败'
+      throw new RequestError(errorMessage, {
+        code: response.status,
+        response,
+        raw: { error: errorMessage },
+        isBusinessError: false,
+        options: _options,
+      })
+    }
 
     // 如果仅要求返回整个响应 JSON
     if (responseReturn === 'body') {
       return new Response(JSON.stringify(json), response)
     }
 
-    const { codeField = 'code', dataField = 'data', successCode = 0, errorCodeField = 'code', errorMessageField = 'message' } = responseReturnConfig as ResponseParserData
+    // data 模式：提取指定字段并校验业务 code
+    const dataConfig = responseReturnConfig as Extract<ResponseParserOptions, { responseReturn: 'data' }>
+    const {
+      codeField = 'code',
+      dataField = 'data',
+      successCode = 0,
+      errorCodeField,
+      errorMessageField = 'message',
+    } = dataConfig
 
     const code = json?.[codeField]
     const isSuccess = isFunction(successCode)
@@ -176,7 +140,7 @@ function createResponseParserHook(): AfterResponseHook {
       const errorCode = json?.[errorCodeField ?? codeField]
 
       throw new RequestError(errorMsg, {
-        isBusinessError: false,
+        isBusinessError: true,
         options: _options,
         code: errorCode,
         raw: json,

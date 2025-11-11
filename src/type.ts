@@ -23,9 +23,9 @@ interface ExtendOptions {
   /**
    * 对返回错误做一些副作用行为（例如客户端遇到错误自动弹出提示）
    */
-  makeErrorMessage?: (message: string, error: RequestError) => void | null
+  makeErrorMessage?: (message: string, error: RequestError) => void
 }
 
 type RequestOption = Options & ExtendOptions & CustomOptions
 
-export type { RequestOption }
+export type { RequestOption, ResponseParserOptions }

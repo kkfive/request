@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Request, RequestError, to } from '../src'
+import { Request, RequestError } from '../src'
 
 describe('exports', () => {
   it('should export Request class', () => {
@@ -10,10 +10,5 @@ describe('exports', () => {
   it('should export RequestError class', () => {
     expect(RequestError).toBeDefined()
     expect(typeof RequestError).toBe('function')
-  })
-
-  it('should export to function', () => {
-    expect(to).toBeDefined()
-    expect(typeof to).toBe('function')
   })
 })

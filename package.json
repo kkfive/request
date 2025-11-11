@@ -28,6 +28,7 @@
     "build": "unbuild",
     "dev": "unbuild --stub",
     "lint": "eslint",
+    "lint:fix": "eslint --fix",
     "prepublishOnly": "nr build",
     "release": "bumpp && pnpm publish",
     "start": "tsx src/index.ts",
@@ -35,11 +36,15 @@
     "test": "vitest --run",
     "typecheck": "tsc --noEmit",
     "prepare": "simple-git-hooks",
-    "update:deps": "npx taze -r -w"
+    "update:deps": "npx taze -r -w",
+    "tsx": "tsx"
   },
   "peerDependencies": {
     "ky": "catalog:",
     "qs": "catalog:"
+  },
+  "dependencies": {
+    "@esdora/kit": "catalog:"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:cli",

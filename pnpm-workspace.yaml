@@ -4,6 +4,7 @@ packages:
   - packages/*
   - examples/*
 catalog:
+  '@esdora/kit': ^0.4.0
   '@types/qs': ^6.14.0
   ky: ^1.14.0
   qs: ^6.14.0

@@ -1,7 +1,7 @@
 import type { KyInstance } from 'ky'
-import type { RequestError } from './errors/app-error'
 import type { RequestOption } from './type'
 import ky, { HTTPError } from 'ky'
+import { RequestError } from './errors/app-error'
 import { paramsSerializerHook } from './modules/params-serializer-hook'
 import { createResponseParserHook } from './modules/response'
 import { merge } from './utils/merge'
@@ -17,8 +17,10 @@ class Request {
     }
     const requestConfig = merge(defaultConfig, requestOption || {})
 
-    // 强制保证 hooks.beforeRequest 存在并顺序正确
+    // 强制保证 hooks 存在
     requestConfig.hooks ??= {}
+
+    // 添加 beforeRequest hook
     requestConfig.hooks.beforeRequest = [
       paramsSerializerHook,
       ...(requestConfig.hooks.beforeRequest ?? []),
@@ -26,9 +28,10 @@ class Request {
 
     // 插入 response 解析 hook（如果提供）
     if (requestOption?.responseParser) {
+      const userAfterHooks = requestConfig.hooks.afterResponse ?? []
       requestConfig.hooks.afterResponse = [
+        ...userAfterHooks,
         createResponseParserHook(),
-        ...(requestConfig.hooks.afterResponse ?? []),
       ]
     }
 
@@ -39,8 +42,8 @@ class Request {
   /**
    * DELETE请求方法
    */
-  public delete<T = any>(url: string, config?: RequestOption): Promise<T> {
-    return this.request<T>(url, { ...config, method: 'DELETE' })
+  public delete<T = any>(url: string, data?: unknown, config?: RequestOption): Promise<T> {
+    return this.request<T>(url, { ...config, json: data, method: 'DELETE' })
   }
 
   /**
@@ -48,6 +51,28 @@ class Request {
    */
   public get<T = any>(url: string, config?: RequestOption): Promise<T> {
     return this.request<T>(url, { ...config, method: 'GET' })
+  }
+
+  /**
+   * HEAD请求方法
+   */
+  public head(url: string, config?: RequestOption): Promise<Response> {
+    return this.request<Response>(url, {
+      ...config,
+      method: 'HEAD',
+      responseParser: { responseReturn: 'raw' },
+    })
+  }
+
+  /**
+   * OPTIONS请求方法
+   */
+  public options(url: string, config?: RequestOption): Promise<Response> {
+    return this.request<Response>(url, {
+      ...config,
+      method: 'OPTIONS',
+      responseParser: { responseReturn: 'raw' },
+    })
   }
 
   /**
@@ -75,38 +100,125 @@ class Request {
    * 通用的请求方法
    */
   public async request<T>(url: string, config: RequestOption): Promise<T> {
-    const responseReturn = this.requestOption?.responseParser?.responseReturn === 'raw' || config.responseParser?.responseReturn === 'raw'
-    const prefixUrl = config.prefixUrl || this.requestOption.prefixUrl
+    // 合并配置，请求级配置优先
+    const mergedConfig = merge(this.requestOption, config)
+
+    // 获取最终的 responseReturn 模式
+    const responseReturn = mergedConfig.responseParser?.responseReturn ?? 'raw'
+
+    // 处理 prefixUrl（使用 !== undefined 来支持空字符串）
+    const prefixUrl = config.prefixUrl !== undefined
+      ? config.prefixUrl
+      : this.requestOption.prefixUrl
+
     if (prefixUrl) {
       // 去除url开头的斜杠
       url = url.startsWith('/') ? url.slice(1) : url
     }
+
     try {
       const response = await this.instance(url, config)
 
-      if (responseReturn) {
+      if (responseReturn === 'raw') {
         return response as T
       }
       return await response.json() as T
     }
     catch (error: unknown) {
-      const makeErrorMessage = config.makeErrorMessage || this.requestOption.makeErrorMessage
+      // 如果配置了 responseParser，将 HTTPError 转换为 RequestError
+      if (mergedConfig.responseParser && error instanceof HTTPError) {
+        const response = error.response
+        const { message, code } = this.formatNetworkError(response)
 
-      if (error instanceof HTTPError) {
-        // 这是 ky 抛出的 HTTP 错误 (如 404, 500)
-        // 你可以从 error.response 中获取到 Response 对象
-        const _error = error as HTTPError
-        Object.defineProperty(_error, 'isBusinessError', { value: false, writable: false, configurable: false })
-        makeErrorMessage?.(_error.message, _error as any)
+        // 尝试解析错误响应体
+        let raw: any = {}
+        try {
+          const contentType = response.headers.get('content-type')
+          if (contentType?.includes('application/json')) {
+            raw = await response.json()
+          }
+          else {
+            raw = { text: await response.text() }
+          }
+        }
+        catch (err) {
+          console.warn('Failed to parse error response:', err)
+        }
+
+        const requestError = new RequestError(message, {
+          code,
+          response,
+          raw,
+          isBusinessError: false,
+          options: mergedConfig,
+        })
+
+        // 调用错误处理回调
+        this.handleError(requestError, mergedConfig)
+
+        throw requestError
       }
-      else if (error instanceof Error) {
-        // 其他类型的错误 (如超时、网络问题)
-        const makeErrorMessage = config.makeErrorMessage || this.requestOption.makeErrorMessage
-        // 对于非 HTTPError，可能没有 _error.response
-        makeErrorMessage?.(error.message, error as RequestError)
-      }
+
+      this.handleError(error, mergedConfig)
       throw error
     }
+  }
+
+  /**
+   * 处理请求错误
+   */
+  private handleError(error: unknown, config: RequestOption): void {
+    const makeErrorMessage = config.makeErrorMessage
+
+    if (error instanceof RequestError) {
+      // 已经是 RequestError，直接调用回调
+      makeErrorMessage?.(error.message, error)
+    }
+    else if (error instanceof HTTPError) {
+      // 这是 ky 抛出的 HTTP 错误 (如 404, 500)
+      const _error = error as HTTPError & { isBusinessError?: boolean }
+      _error.isBusinessError = false
+      makeErrorMessage?.(_error.message, _error as any)
+    }
+    else if (error instanceof Error) {
+      // 其他类型的错误 (如超时、网络问题)
+      makeErrorMessage?.(error.message, error as RequestError)
+    }
+  }
+
+  /**
+   * 格式化网络错误信息
+   */
+  private formatNetworkError(response: Response): { message: string, code: number } {
+    const status = response.status
+    const errorMessages: Record<number, string> = {
+      400: '请求参数错误',
+      401: '未授权或登录已过期',
+      403: '没有权限访问该资源',
+      404: '请求的资源不存在',
+      500: '服务器内部错误',
+      502: '网关错误',
+      503: '服务不可用',
+      504: '网关超时',
+    }
+
+    const message = errorMessages[status] || `网络错误，状态码：${status}`
+    return { message, code: status }
+  }
+
+  /**
+   * 扩展当前实例，创建一个新的 Request 实例
+   */
+  public extend(options: RequestOption): Request {
+    const mergedOptions = merge(this.requestOption, options)
+    return new Request(mergedOptions)
+  }
+
+  /**
+   * 创建一个新的 Request 实例（静态方法）
+   */
+  public static create(options?: RequestOption): Request {
+    return new Request(options)
   }
 }
 export { Request }

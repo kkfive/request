@@ -1,20 +1,27 @@
 import process from 'node:process'
-import { beforeAll, describe, expect, it, vi } from 'vitest'
-import { Request, RequestError, to } from '../src'
+import { to } from '@esdora/kit'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Request, RequestError } from '../src'
 
 describe('request Library Tests', () => {
-  const afterResponseFn = vi.fn()
-  const makeErrorMessageFn = vi.fn()
-
+  let afterResponseFn: ReturnType<typeof vi.fn>
+  let makeErrorMessageFn: ReturnType<typeof vi.fn>
   let request: Request
+  let mockServerUrl: string
 
   beforeAll(() => {
     // 从环境变量获取 mock 服务器 URL
-    const mockServerUrl = process.env.MOCK_SERVER_URL || 'http://localhost:3456'
+    mockServerUrl = process.env.MOCK_SERVER_URL || 'http://localhost:3456'
+  })
+
+  beforeEach(() => {
+    // 在每个测试前重新创建 mock 函数和 Request 实例
+    afterResponseFn = vi.fn()
+    makeErrorMessageFn = vi.fn() as any
 
     request = new Request({
       prefixUrl: mockServerUrl,
-      makeErrorMessage: makeErrorMessageFn,
+      makeErrorMessage: makeErrorMessageFn as any,
       responseParser: {
         responseReturn: 'data',
         dataField: 'data',
@@ -28,7 +35,7 @@ describe('request Library Tests', () => {
       hooks: {
         afterResponse: [
           (request, options, response) => {
-            afterResponseFn()
+            ;(afterResponseFn as any)()
             return response
           },
         ],
@@ -118,10 +125,8 @@ describe('request Library Tests', () => {
       expect(makeErrorMessageFn).toHaveBeenCalled()
       // 传入makeErrorMessageFn的参数
       expect(makeErrorMessageFn).toHaveBeenCalledWith(error?.message, error as RequestError)
-      makeErrorMessageFn.mockRestore()
     })
     it('错误消息处理(自定义错误处理器)', async () => {
-      makeErrorMessageFn.mockRestore()
       const localMakeErrorMessageFn = vi.fn()
       const [error, result] = await to(request.get(mockRequest.businessError, {
         makeErrorMessage: localMakeErrorMessageFn,
