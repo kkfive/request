@@ -1,33 +1,39 @@
-import * as process from 'node:process'
-import { describe, expect, it, vi } from 'vitest'
+import process from 'node:process'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { Request, RequestError, to } from '../src'
-
-const prefixUrl = process.env.PREFIX_URL
 
 describe('request Library Tests', () => {
   const afterResponseFn = vi.fn()
   const makeErrorMessageFn = vi.fn()
-  const request = new Request({
-    prefixUrl,
-    makeErrorMessage: makeErrorMessageFn,
-    responseParser: {
-      responseReturn: 'data',
-      dataField: 'data',
-      errorMessageField: 'errorMessage',
-      errorCodeField: 'errorCode',
-      // 自定义判断状态码的字段
-      codeField: 'success',
-      // 自定义判断状态码逻辑（例如success字段为true则表示成功；code字段为0则表示成功）
-      successCode: code => code === true,
-    },
-    hooks: {
-      afterResponse: [
-        (request, options, response) => {
-          afterResponseFn()
-          return response
-        },
-      ],
-    },
+
+  let request: Request
+
+  beforeAll(() => {
+    // 从环境变量获取 mock 服务器 URL
+    const mockServerUrl = process.env.MOCK_SERVER_URL || 'http://localhost:3456'
+
+    request = new Request({
+      prefixUrl: mockServerUrl,
+      makeErrorMessage: makeErrorMessageFn,
+      responseParser: {
+        responseReturn: 'data',
+        dataField: 'data',
+        errorMessageField: 'errorMessage',
+        errorCodeField: 'errorCode',
+        // 自定义判断状态码的字段
+        codeField: 'success',
+        // 自定义判断状态码逻辑（例如success字段为true则表示成功；code字段为0则表示成功）
+        successCode: code => code === true,
+      },
+      hooks: {
+        afterResponse: [
+          (request, options, response) => {
+            afterResponseFn()
+            return response
+          },
+        ],
+      },
+    })
   })
   describe('request Class', () => {
     it('判断是否包含请求方法', () => {
