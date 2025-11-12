@@ -31,7 +31,7 @@ yarn add @kkfive/request ky qs
 
 > **注意**：`ky` 和 `qs` 是 peer dependencies，需要手动安装。
 
-> **兼容性提示**：本库为 ESM-only，需运行在 Node.js 18+ 或任一支持 ESM 的构建环境；CommonJS 项目可使用 `await import('@kkfive/request')` 动态加载。
+> **兼容性提示**：推荐在 Node.js LTS (18+) 的 ESM 环境中使用；若仍在 CommonJS 项目中，可以直接 `const { request } = require('@kkfive/request')`。
 
 ## 🚀 快速开始
 

@@ -15,12 +15,15 @@
   "keywords": [],
   "sideEffects": false,
   "exports": {
-    ".": "./dist/index.mjs",
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
     "./package.json": "./package.json"
   },
-  "main": "./dist/index.mjs",
+  "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
+  "types": "./dist/index.d.cts",
   "files": [
     "dist"
   ],
@@ -44,26 +47,26 @@
     "qs": "^6.14.0"
   },
   "devDependencies": {
-    "@antfu/eslint-config": "catalog:cli",
-    "@antfu/ni": "catalog:cli",
-    "@antfu/utils": "catalog:inlined",
+    "@antfu/eslint-config": "catalog:",
+    "@antfu/ni": "catalog:",
+    "@antfu/utils": "catalog:",
     "@esdora/kit": "catalog:",
-    "@types/node": "catalog:types",
+    "@types/node": "catalog:",
     "@types/qs": "catalog:",
-    "bumpp": "catalog:cli",
-    "eslint": "catalog:cli",
+    "bumpp": "catalog:",
+    "eslint": "catalog:",
     "ky": "catalog:",
-    "lint-staged": "catalog:cli",
+    "lint-staged": "catalog:",
     "qs": "catalog:",
-    "simple-git-hooks": "catalog:cli",
-    "tinyexec": "catalog:utils",
+    "simple-git-hooks": "catalog:",
+    "tinyexec": "catalog:",
     "tsdown": "catalog:",
-    "tsx": "catalog:cli",
-    "typescript": "catalog:cli",
-    "vite": "catalog:cli",
-    "vitest": "catalog:testing",
-    "vitest-package-exports": "catalog:testing",
-    "yaml": "catalog:testing"
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "vitest-package-exports": "catalog:",
+    "yaml": "catalog:"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm lint-staged"

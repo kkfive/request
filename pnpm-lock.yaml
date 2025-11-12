@@ -4,137 +4,69 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-catalogs:
-  cli:
-    '@antfu/eslint-config':
-      specifier: ^6.2.0
-      version: 6.2.0
-    '@antfu/ni':
-      specifier: ^27.0.1
-      version: 27.0.1
-    bumpp:
-      specifier: ^10.3.1
-      version: 10.3.1
-    eslint:
-      specifier: ^9.39.1
-      version: 9.39.1
-    lint-staged:
-      specifier: ^16.2.6
-      version: 16.2.6
-    simple-git-hooks:
-      specifier: ^2.13.1
-      version: 2.13.1
-    tsx:
-      specifier: ^4.20.6
-      version: 4.20.6
-    typescript:
-      specifier: ^5.9.3
-      version: 5.9.3
-    vite:
-      specifier: ^7.2.2
-      version: 7.2.2
-  default:
-    '@esdora/kit':
-      specifier: ^0.4.0
-      version: 0.4.0
-    '@types/qs':
-      specifier: ^6.14.0
-      version: 6.14.0
-    ky:
-      specifier: ^1.14.0
-      version: 1.14.0
-    qs:
-      specifier: ^6.14.0
-      version: 6.14.0
-    tsdown:
-      specifier: ^0.16.3
-      version: 0.16.3
-  inlined:
-    '@antfu/utils':
-      specifier: ^9.3.0
-      version: 9.3.0
-  testing:
-    vitest:
-      specifier: ^4.0.8
-      version: 4.0.8
-    vitest-package-exports:
-      specifier: ^0.1.1
-      version: 0.1.1
-    yaml:
-      specifier: ^2.8.1
-      version: 2.8.1
-  types:
-    '@types/node':
-      specifier: ^22.19.0
-      version: 22.19.1
-  utils:
-    tinyexec:
-      specifier: ^0.3.2
-      version: 0.3.2
-
 importers:
 
   .:
     devDependencies:
       '@antfu/eslint-config':
-        specifier: catalog:cli
+        specifier: ^6.2.0
         version: 6.2.0(@vue/compiler-sfc@3.5.24)(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3)(vitest@4.0.8(@types/debug@4.1.12)(@types/node@22.19.1)(jiti@2.6.1)(tsx@4.20.6)(yaml@2.8.1))
       '@antfu/ni':
-        specifier: catalog:cli
+        specifier: ^27.0.1
         version: 27.0.1
       '@antfu/utils':
-        specifier: catalog:inlined
+        specifier: ^9.3.0
         version: 9.3.0
       '@esdora/kit':
-        specifier: 'catalog:'
+        specifier: ^0.4.0
         version: 0.4.0
       '@types/node':
-        specifier: catalog:types
+        specifier: ^22.19.0
         version: 22.19.1
       '@types/qs':
-        specifier: 'catalog:'
+        specifier: ^6.14.0
         version: 6.14.0
       bumpp:
-        specifier: catalog:cli
+        specifier: ^10.3.1
         version: 10.3.1
       eslint:
-        specifier: catalog:cli
+        specifier: ^9.39.1
         version: 9.39.1(jiti@2.6.1)
       ky:
-        specifier: 'catalog:'
+        specifier: ^1.14.0
         version: 1.14.0
       lint-staged:
-        specifier: catalog:cli
+        specifier: ^16.2.6
         version: 16.2.6
       qs:
-        specifier: 'catalog:'
+        specifier: ^6.14.0
         version: 6.14.0
       simple-git-hooks:
-        specifier: catalog:cli
+        specifier: ^2.13.1
         version: 2.13.1
       tinyexec:
-        specifier: catalog:utils
+        specifier: ^0.3.2
         version: 0.3.2
       tsdown:
-        specifier: 'catalog:'
+        specifier: ^0.16.3
         version: 0.16.3(ms@2.1.3)(synckit@0.11.11)(typescript@5.9.3)
       tsx:
-        specifier: catalog:cli
+        specifier: ^4.20.6
         version: 4.20.6
       typescript:
-        specifier: catalog:cli
+        specifier: ^5.9.3
         version: 5.9.3
       vite:
-        specifier: catalog:cli
+        specifier: ^7.2.2
         version: 7.2.2(@types/node@22.19.1)(jiti@2.6.1)(tsx@4.20.6)(yaml@2.8.1)
       vitest:
-        specifier: catalog:testing
+        specifier: ^4.0.8
         version: 4.0.8(@types/debug@4.1.12)(@types/node@22.19.1)(jiti@2.6.1)(tsx@4.20.6)(yaml@2.8.1)
       vitest-package-exports:
-        specifier: catalog:testing
+        specifier: ^0.1.1
         version: 0.1.1
       yaml:
-        specifier: catalog:testing
+        specifier: ^2.8.1
         version: 2.8.1
 
 packages:
