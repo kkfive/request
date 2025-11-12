@@ -25,8 +25,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "unbuild",
-    "dev": "unbuild --stub",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
     "prepublishOnly": "nr build",
@@ -40,35 +40,35 @@
     "tsx": "tsx"
   },
   "peerDependencies": {
-    "ky": "catalog:",
-    "qs": "catalog:"
-  },
-  "dependencies": {
-    "@esdora/kit": "catalog:"
+    "ky": "^1.14.0",
+    "qs": "^6.14.0"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:cli",
     "@antfu/ni": "catalog:cli",
     "@antfu/utils": "catalog:inlined",
+    "@esdora/kit": "catalog:",
     "@types/node": "catalog:types",
     "@types/qs": "catalog:",
     "bumpp": "catalog:cli",
     "eslint": "catalog:cli",
+    "ky": "catalog:",
     "lint-staged": "catalog:cli",
+    "qs": "catalog:",
     "simple-git-hooks": "catalog:cli",
     "tinyexec": "catalog:utils",
+    "tsdown": "catalog:",
     "tsx": "catalog:cli",
     "typescript": "catalog:cli",
-    "unbuild": "catalog:cli",
     "vite": "catalog:cli",
     "vitest": "catalog:testing",
     "vitest-package-exports": "catalog:testing",
     "yaml": "catalog:testing"
   },
   "simple-git-hooks": {
-    "pre-commit": "pnpm i --frozen-lockfile --ignore-scripts --offline && npx lint-staged"
+    "pre-commit": "pnpm lint-staged"
   },
   "lint-staged": {
-    "*": "eslint --fix"
+    "**/*.{ts,tsx,js,jsx,mts,mjs,cts,cjs}": "eslint --fix"
   }
 }

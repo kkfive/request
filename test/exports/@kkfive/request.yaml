@@ -1,3 +1,4 @@
 .:
+  request: object
   Request: function
   RequestError: function

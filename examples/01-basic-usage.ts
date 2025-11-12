@@ -7,7 +7,7 @@
  */
 
 import { to } from '@esdora/kit'
-import { Request } from '../src'
+import { request as defaultRequest, Request } from '../src'
 
 // 创建一个基础的 Request 实例
 const request = new Request({
@@ -19,6 +19,20 @@ const request = new Request({
 
 async function basicUsage() {
   console.log('=== 基础使用示例 ===\n')
+
+  // 示例 0: 使用内置实例快速 GET
+  console.log('0. 使用内置实例 request 发起 GET:')
+  const [quickError, quickUser] = await to(defaultRequest.get('/users/1', {
+    prefixUrl: 'https://jsonplaceholder.typicode.com',
+  }))
+  if (quickError) {
+    console.error('内置实例请求失败:', quickError.message)
+  }
+  else {
+    console.log('内置实例获取的用户:', quickUser)
+  }
+
+  console.log('\n---\n')
 
   // 示例 1: GET 请求
   console.log('1. GET 请求示例:')

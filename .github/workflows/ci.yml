@@ -32,7 +32,7 @@ jobs:
 
     strategy:
       matrix:
-        node: [lts/*]
+        node: [18.x, 20.x, 22.x]
         os: [ubuntu-latest]
       fail-fast: false
 
@@ -51,5 +51,3 @@ jobs:
       - run: nci
       - run: nr build
       - run: nr test
-        env:
-          PREFIX_URL: ${{ secrets.PREFIX_URL }}

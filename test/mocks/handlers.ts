@@ -63,6 +63,7 @@ export function createHttpErrorResponse(status = 500, message = 'Internal Server
  */
 export const mockRoutes: Record<string, MockResponse> = {
   '/success': createSuccessResponse(),
+  '/success/query?foo=123&bar=456': createSuccessResponse('query-ok'),
   '/error/business/500': createBusinessErrorResponse(),
   '/error/http/500': createHttpErrorResponse(),
 }

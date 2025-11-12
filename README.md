@@ -31,6 +31,8 @@ yarn add @kkfive/request ky qs
 
 > **注意**：`ky` 和 `qs` 是 peer dependencies，需要手动安装。
 
+> **兼容性提示**：本库为 ESM-only，需运行在 Node.js 18+ 或任一支持 ESM 的构建环境；CommonJS 项目可使用 `await import('@kkfive/request')` 动态加载。
+
 ## 🚀 快速开始
 
 ### 基础使用
@@ -52,6 +54,22 @@ console.log('用户数据:', data)
 const newUser = await request.post('/users', {
   name: '张三',
   email: 'zhangsan@example.com',
+})
+```
+
+### 最简调用（内置实例）
+
+直接使用库内置的 `request` 实例即可完成一次请求，也可以配合 `extend` 派生新实例：
+
+```typescript
+import { request } from '@kkfive/request'
+
+const user = await request.get('/users/1', {
+  prefixUrl: 'https://api.example.com',
+})
+
+const authedRequest = request.extend({
+  headers: { Authorization: 'Bearer token' },
 })
 ```
 

@@ -10,30 +10,21 @@ class Request {
   private readonly instance: KyInstance
   private readonly requestOption: RequestOption
   constructor(requestOption?: RequestOption) {
-    // 合并默认配置和传入的配置
     const defaultConfig: RequestOption = {
       headers: { 'Content-Type': 'application/json;charset=utf-8' },
       timeout: 10_000,
     }
-    const requestConfig = merge(defaultConfig, requestOption || {})
 
-    // 强制保证 hooks 存在
+    const requestConfig = merge(
+      merge({}, defaultConfig),
+      requestOption || {},
+    )
+
     requestConfig.hooks ??= {}
-
-    // 添加 beforeRequest hook
     requestConfig.hooks.beforeRequest = [
       paramsSerializerHook,
       ...(requestConfig.hooks.beforeRequest ?? []),
     ]
-
-    // 插入 response 解析 hook（如果提供）
-    if (requestOption?.responseParser) {
-      const userAfterHooks = requestConfig.hooks.afterResponse ?? []
-      requestConfig.hooks.afterResponse = [
-        ...userAfterHooks,
-        createResponseParserHook(),
-      ]
-    }
 
     this.instance = ky.create(requestConfig)
     this.requestOption = requestConfig
@@ -99,25 +90,49 @@ class Request {
   /**
    * 通用的请求方法
    */
-  public async request<T>(url: string, config: RequestOption): Promise<T> {
-    // 合并配置，请求级配置优先
-    const mergedConfig = merge(this.requestOption, config)
-
-    // 获取最终的 responseReturn 模式
-    const responseReturn = mergedConfig.responseParser?.responseReturn ?? 'raw'
-
-    // 处理 prefixUrl（使用 !== undefined 来支持空字符串）
-    const prefixUrl = config.prefixUrl !== undefined
-      ? config.prefixUrl
+  public async request<T>(url: string, config?: RequestOption): Promise<T> {
+    const perRequestConfig: RequestOption = merge({}, config || {})
+    const prefixUrl = perRequestConfig.prefixUrl !== undefined
+      ? perRequestConfig.prefixUrl
       : this.requestOption.prefixUrl
 
-    if (prefixUrl) {
-      // 去除url开头的斜杠
+    if (prefixUrl !== undefined) {
+      perRequestConfig.prefixUrl = prefixUrl
       url = url.startsWith('/') ? url.slice(1) : url
     }
 
+    const mergedConfig = merge(
+      merge({}, this.requestOption),
+      perRequestConfig,
+    )
+
+    const responseParserConfig = mergedConfig.responseParser
+    const shouldInjectParser = Boolean(
+      responseParserConfig
+      && responseParserConfig.responseReturn
+      && responseParserConfig.responseReturn !== 'raw',
+    )
+
+    if (shouldInjectParser) {
+      const responseParserHook = createResponseParserHook()
+
+      perRequestConfig.hooks ??= {}
+      perRequestConfig.hooks.afterResponse = [
+        ...(perRequestConfig.hooks.afterResponse ?? []),
+        responseParserHook,
+      ]
+
+      mergedConfig.hooks ??= {}
+      mergedConfig.hooks.afterResponse = [
+        ...(mergedConfig.hooks.afterResponse ?? []),
+        responseParserHook,
+      ]
+    }
+
+    const responseReturn = mergedConfig.responseParser?.responseReturn ?? 'raw'
+
     try {
-      const response = await this.instance(url, config)
+      const response = await this.instance(url, perRequestConfig)
 
       if (responseReturn === 'raw') {
         return response as T
@@ -210,7 +225,7 @@ class Request {
    * 扩展当前实例，创建一个新的 Request 实例
    */
   public extend(options: RequestOption): Request {
-    const mergedOptions = merge(this.requestOption, options)
+    const mergedOptions = merge(merge({}, this.requestOption), options)
     return new Request(mergedOptions)
   }
 

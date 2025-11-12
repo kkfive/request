@@ -100,6 +100,64 @@ describe('request Library Tests', () => {
     })
   })
 
+  describe('按次配置与扩展', () => {
+    it('按次 responseParser 在无实例级配置时也生效', async () => {
+      const bareRequest = new Request({
+        prefixUrl: mockServerUrl,
+      })
+
+      const [error, result] = await to(bareRequest.get('/success', {
+        responseParser: {
+          responseReturn: 'body',
+        },
+      }))
+
+      expect(error).toBeNull()
+      expect(result).toHaveProperty('success', true)
+    })
+
+    it('prefixUrl 可以在请求级别覆盖', async () => {
+      const noPrefixRequest = new Request()
+      const [error, result] = await to(noPrefixRequest.get('/success', {
+        prefixUrl: mockServerUrl,
+        responseParser: {
+          responseReturn: 'body',
+        },
+      }))
+
+      expect(error).toBeNull()
+      expect(result).toHaveProperty('success', true)
+    })
+
+    it('查询参数在 hook 中会与原始 query 合并', async () => {
+      const [error, result] = await to(request.get('/success/query?foo=123', {
+        params: { bar: 456 },
+      }))
+
+      expect(error).toBeNull()
+      expect(result).toBe('query-ok')
+    })
+
+    it('extend 不会污染原始实例配置', async () => {
+      const bareRequest = new Request({
+        prefixUrl: mockServerUrl,
+      })
+      const extended = bareRequest.extend({
+        responseParser: {
+          responseReturn: 'body',
+        },
+      })
+
+      const [extendedError, extendedResult] = await to(extended.get('/success'))
+      expect(extendedError).toBeNull()
+      expect(extendedResult).toHaveProperty('success', true)
+
+      const [baseError, baseResult] = await to(bareRequest.get('/success'))
+      expect(baseError).toBeNull()
+      expect(baseResult).toBeInstanceOf(Response)
+    })
+  })
+
   describe('异常请求', () => {
     const mockRequest = {
       businessError: '/error/business/500',
