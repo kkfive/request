@@ -6,4 +6,9 @@ export default antfu(
     type: 'lib',
     pnpm: true,
   },
+  {
+    ignores: [
+      'README.md',
+    ],
+  },
 )
