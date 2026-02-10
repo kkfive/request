@@ -1,4 +1,5 @@
 .:
+  createClient: function
   Request: function
   RequestError: function
   to: function

@@ -134,7 +134,9 @@ function createResponseParserHook(): AfterResponseHook {
   return async (_request, options, response) => {
     const _options = options as RequestOption
     const responseReturnConfig = _options?.responseParser
-    const { responseReturn = 'raw' } = responseReturnConfig ?? {}
+    // responseReturnConfig 总是存在的，因为这个 hook 只有在实例有 responseParser 时才会被添加
+    // ky 会将实例配置传递给 hook
+    const { responseReturn = 'raw' } = responseReturnConfig!
     // 不处理任何内容，直接返回原始 Response
     if (!responseReturn || responseReturn === 'raw') {
       return response
@@ -173,7 +175,7 @@ function createResponseParserHook(): AfterResponseHook {
         ? errorMessageField(json)
         : json?.[errorMessageField] || json?.msg || '接口响应失败'
 
-      const errorCode = json?.[errorCodeField ?? codeField]
+      const errorCode = json?.[errorCodeField]
 
       throw new RequestError(errorMsg, {
         isBusinessError: false,

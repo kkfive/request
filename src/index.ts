@@ -1,3 +1,4 @@
 export * from './errors/app-error/index'
-export * from './request'
+export { createClient, Request } from './request'
+export type { AuthOptions, LifecycleCallbacks, RequestOption } from './request'
 export * from './utils/to'
