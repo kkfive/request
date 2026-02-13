@@ -1,9 +1,37 @@
-import { Request } from './request'
+// 核心导出
+export { createClient, Request } from './core/client'
 
-export * from './errors/app-error/index'
-export * from './request'
-export type { ResponseParserOptions } from './type'
+// 错误类
+export { RequestError } from './errors/request-error'
 
-const request = Request.create()
+// 内置 hooks（供高级用户使用）
+export {
+  createAuthHook,
+  createContentTypeHook,
+  createResponseParserHook,
+  createUnauthorizedHook,
+  paramsSerializerHook,
+} from './hooks'
 
-export { request }
+// 类型导出
+export type {
+  AuthConfig,
+  AuthOptions,
+  BuiltInHookName,
+  BuiltInHooksConfig,
+  ExtendedHooks,
+  HookArrayConfig,
+  HookControl,
+  LifecycleCallbacks,
+  RequestConfig,
+  RequestOption,
+  ResponseParserBodyConfig,
+  ResponseParserConfig,
+  ResponseParserDataConfig,
+  ResponseParserOptions,
+  ResponseParserRawConfig,
+  ResponseReturnMode,
+} from './types'
+
+// 工具函数
+export { to } from './utils'

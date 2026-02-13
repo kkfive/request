@@ -7,4 +7,11 @@ export default antfu(
     pnpm: true,
     markdown: false, // 禁用 markdown 文件的 lint 检查
   },
+  {
+    ignores: [
+      'README.md',
+      'CLAUDE.md',
+      '**/docs',
+    ],
+  },
 )

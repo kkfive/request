@@ -1,8 +1,8 @@
 {
   "name": "@kkfive/request",
   "type": "module",
-  "version": "0.3.0",
-  "packageManager": "pnpm@10.21.0",
+  "version": "0.1.1",
+  "packageManager": "pnpm@10.29.2",
   "description": "A self-used request encapsulation",
   "author": "DreamyTZK",
   "license": "MIT",
@@ -15,21 +15,18 @@
   "keywords": [],
   "sideEffects": false,
   "exports": {
-    ".": {
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs"
-    },
+    ".": "./dist/index.mjs",
     "./package.json": "./package.json"
   },
-  "main": "./dist/index.cjs",
+  "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
-  "types": "./dist/index.d.cts",
+  "types": "./dist/index.d.mts",
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
+    "build": "unbuild",
+    "dev": "unbuild --stub",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
     "prepublishOnly": "nr build",
@@ -38,40 +35,36 @@
     "start:example": "tsx examples/index.ts",
     "test": "vitest --run",
     "typecheck": "tsc --noEmit",
-    "prepare": "simple-git-hooks",
-    "update:deps": "npx taze -r -w",
-    "tsx": "tsx"
+    "prepare": "simple-git-hooks"
   },
   "peerDependencies": {
-    "ky": "^1.14.0",
-    "qs": "^6.14.0"
+    "ky": "catalog:",
+    "qs": "catalog:"
   },
   "devDependencies": {
-    "@antfu/eslint-config": "catalog:",
-    "@antfu/ni": "catalog:",
-    "@antfu/utils": "catalog:",
-    "@esdora/kit": "catalog:",
-    "@types/node": "catalog:",
+    "@antfu/eslint-config": "catalog:cli",
+    "@antfu/ni": "catalog:cli",
+    "@antfu/utils": "catalog:inlined",
+    "@types/node": "catalog:types",
     "@types/qs": "catalog:",
-    "bumpp": "catalog:",
-    "eslint": "catalog:",
-    "ky": "catalog:",
-    "lint-staged": "catalog:",
-    "qs": "catalog:",
-    "simple-git-hooks": "catalog:",
-    "tinyexec": "catalog:",
-    "tsdown": "catalog:",
-    "tsx": "catalog:",
-    "typescript": "catalog:",
-    "vite": "catalog:",
-    "vitest": "catalog:",
-    "vitest-package-exports": "catalog:",
-    "yaml": "catalog:"
+    "@vitest/coverage-v8": "catalog:",
+    "bumpp": "catalog:cli",
+    "eslint": "catalog:cli",
+    "lint-staged": "catalog:cli",
+    "simple-git-hooks": "catalog:cli",
+    "tinyexec": "catalog:utils",
+    "tsx": "catalog:cli",
+    "typescript": "catalog:cli",
+    "unbuild": "catalog:cli",
+    "vite": "catalog:cli",
+    "vitest": "catalog:testing",
+    "vitest-package-exports": "catalog:testing",
+    "yaml": "catalog:testing"
   },
   "simple-git-hooks": {
-    "pre-commit": "pnpm lint-staged"
+    "pre-commit": "pnpm i --frozen-lockfile --ignore-scripts --offline && npx lint-staged"
   },
   "lint-staged": {
-    "**/*.{ts,tsx,js,jsx,mts,mjs,cts,cjs}": "eslint --fix"
+    "*": "eslint --fix"
   }
 }

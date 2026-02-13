@@ -1,4 +1,10 @@
 .:
-  request: object
+  createAuthHook: function
+  createClient: function
+  createContentTypeHook: function
+  createResponseParserHook: function
+  createUnauthorizedHook: function
+  paramsSerializerHook: function
   Request: function
   RequestError: function
+  to: function

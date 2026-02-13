@@ -8,5 +8,11 @@ export default defineConfig({
         inline: ['vitest-package-exports'],
       },
     },
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts'],
+      exclude: ['src/**/*.d.ts', 'src/type.ts'],
+      reporter: ['text', 'html'],
+    },
   },
 })
