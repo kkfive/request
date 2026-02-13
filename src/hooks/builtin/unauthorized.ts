@@ -139,16 +139,15 @@ function createUnauthorizedHook(
 
         return retryResponse
       }
-    }
 
-    // 触发 onUnauthorized 回调
-    // 清理缓存，缩短 clone body 存活时间
-    requestBodyCache.delete(request)
-    try {
-      onUnauthorized?.()
-    }
-    catch (callbackError) {
-      console.error('[kk-request] onUnauthorized callback error:', callbackError)
+      // 无 refreshToken 配置，直接触发 onUnauthorized
+      requestBodyCache.delete(request)
+      try {
+        onUnauthorized?.()
+      }
+      catch (callbackError) {
+        console.error('[kk-request] onUnauthorized callback error:', callbackError)
+      }
     }
 
     return response
