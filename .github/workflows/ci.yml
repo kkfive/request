@@ -32,7 +32,6 @@ jobs:
 
     strategy:
       matrix:
-        node: [lts/*]
         os: [ubuntu-latest]
       fail-fast: false
 
@@ -41,10 +40,10 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           run_install: false
-      - name: Set node ${{ matrix.node }}
+      - name: Set node lts/*
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
+          node-version: lts/*
           cache: pnpm
 
       - run: pnpm i -g @antfu/ni

@@ -56,11 +56,12 @@ export function merge<T extends Record<PropertyKey, any>, S extends Record<Prope
     const targetValue = target[key]
 
     if (Array.isArray(sourceValue)) {
+      const sourceClone = cloneArray(sourceValue)
       if (Array.isArray(targetValue)) {
-        target[key] = merge(targetValue, sourceValue)
+        target[key] = [...cloneArray(targetValue), ...sourceClone] as any
       }
       else {
-        target[key] = merge([], sourceValue)
+        target[key] = sourceClone as any
       }
     }
     else if (isPlainObject(sourceValue)) {
@@ -71,10 +72,22 @@ export function merge<T extends Record<PropertyKey, any>, S extends Record<Prope
         target[key] = merge({}, sourceValue)
       }
     }
-    else if (targetValue === undefined || sourceValue !== undefined) {
-      target[key] = sourceValue
+    else if (sourceValue !== undefined) {
+      target[key] = sourceValue as any
     }
   }
 
   return target
+}
+
+function cloneArray(value: any[]): any[] {
+  return value.map((item) => {
+    if (Array.isArray(item)) {
+      return cloneArray(item)
+    }
+    if (isPlainObject(item)) {
+      return merge({}, item)
+    }
+    return item
+  })
 }
