@@ -951,7 +951,7 @@ describe('request 核心功能测试', () => {
   })
 
   describe('错误处理', () => {
-    it('业务错误应包含 isBusinessError=false', async () => {
+    it('业务错误应包含 isBusinessError=true', async () => {
       const request = new Request({
         prefixUrl: baseUrl,
         responseParser: {
@@ -966,7 +966,7 @@ describe('request 核心功能测试', () => {
 
       const [error] = await to(request.get('/error/business/500'))
       expect(error).toBeInstanceOf(RequestError)
-      expect((error as RequestError).isBusinessError).toBe(false)
+      expect((error as RequestError).isBusinessError).toBe(true)
     })
 
     it('makeErrorMessage 实例级应被调用', async () => {
