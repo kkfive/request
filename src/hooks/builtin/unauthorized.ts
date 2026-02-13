@@ -1,5 +1,6 @@
 import type { AfterResponseHook, KyInstance } from 'ky'
 import type { AuthConfig } from '../../types'
+import { RequestError } from '../../errors/request-error'
 import { requestBodyCache } from './auth'
 
 // 创建一个可识别的 marker hook
@@ -20,10 +21,6 @@ function createUnauthorizedHook(
 ): AfterResponseHook {
   // 使用闭包级别的 Promise，每个 hook 实例独立，避免多实例间的 token 混淆
   let refreshPromise: Promise<string> | null = null
-  // 标记是否为 refresh 发起者（用于回调去重）
-  // 注意：这是共享布尔量，不保证由"最先创建 refreshPromise 的请求"触发回调
-  // 但仍然只触发一次，功能正确
-  let isRefreshInitiator = false
 
   return async (request: globalThis.Request, options: any, response: Response) => {
     if (response.status === 401) {
@@ -35,6 +32,8 @@ function createUnauthorizedHook(
       if (isRetryRequest) {
         // 清理缓存，缩短 clone body 存活时间
         requestBodyCache.delete(request)
+        // 重置状态，避免污染
+        refreshPromise = null
         try {
           onUnauthorized?.()
         }
@@ -48,10 +47,11 @@ function createUnauthorizedHook(
       if (auth?.refreshToken && getKyInstance) {
         // 阶段 1: 刷新 token
         let newToken: string
+        let shouldTriggerCallback = false
         try {
           // 如果已有刷新请求，等待它完成；否则立即创建 Promise 占位，消除竞态窗口
           if (!refreshPromise) {
-            isRefreshInitiator = true // 标记为发起者
+            shouldTriggerCallback = true // 标记为发起者
             refreshPromise = (async () => {
               const refreshToken = await auth.refreshToken!.getRefreshToken()
               return await auth.refreshToken!.refresh(refreshToken)
@@ -66,7 +66,7 @@ function createUnauthorizedHook(
           // 清理缓存，缩短 clone body 存活时间
           requestBodyCache.delete(request)
           // 只有发起者触发回调，避免并发请求重复触发
-          if (isRefreshInitiator) {
+          if (shouldTriggerCallback) {
             try {
               auth.refreshToken.onRefreshFail?.(error instanceof Error ? error : new Error(String(error)))
             }
@@ -80,12 +80,11 @@ function createUnauthorizedHook(
               console.error('[kk-request] onUnauthorized callback error:', callbackError)
             }
           }
-          isRefreshInitiator = false
           return response
         }
 
         // 阶段 2: 触发成功回调（隔离在 try-catch 外，避免回调异常误判为 refresh 失败）
-        if (isRefreshInitiator) {
+        if (shouldTriggerCallback) {
           try {
             // ✅ 修改：await 回调执行
             await auth.refreshToken.onRefreshSuccess?.(newToken)
@@ -94,7 +93,6 @@ function createUnauthorizedHook(
             // 回调异常不影响 refresh 成功状态，仅记录错误
             console.error('[kk-request] onRefreshSuccess callback error:', callbackError)
           }
-          isRefreshInitiator = false
         }
 
         // 阶段 3: 重试请求
@@ -133,14 +131,12 @@ function createUnauthorizedHook(
         })
 
         // 清理缓存
-        if (cachedRequest) {
-          requestBodyCache.delete(request)
-        }
+        requestBodyCache.delete(request)
 
         return retryResponse
       }
 
-      // 无 refreshToken 配置，直接触发 onUnauthorized
+      // 无 refreshToken 配置，抛出 RequestError
       requestBodyCache.delete(request)
       try {
         onUnauthorized?.()
@@ -148,6 +144,19 @@ function createUnauthorizedHook(
       catch (callbackError) {
         console.error('[kk-request] onUnauthorized callback error:', callbackError)
       }
+
+      // 抛出 RequestError 而不是返回 response
+      const locale = (options as any).locale || 'zh'
+      const errorMessages = {
+        zh: '未授权或登录已过期',
+        en: 'Unauthorized or session expired',
+      }
+      throw new RequestError(errorMessages[locale as keyof typeof errorMessages] || errorMessages.zh, {
+        code: 401,
+        response,
+        isBusinessError: false,
+        options: options as any,
+      })
     }
 
     return response

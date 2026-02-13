@@ -34,7 +34,7 @@ function createResponseParserHook(): AfterResponseHook {
   return async (_request, options, response) => {
     const _options = options as RequestConfig
     const responseReturnConfig = _options?.responseParser
-    const { responseReturn = 'raw' } = responseReturnConfig!
+    const { responseReturn = 'raw' } = responseReturnConfig ?? {}
 
     // 不处理任何内容，直接返回原始 Response
     if (!responseReturn || responseReturn === 'raw') {
@@ -44,6 +44,11 @@ function createResponseParserHook(): AfterResponseHook {
     const _response = response.clone()
 
     if (!response.ok) {
+      // 跳过 401，让 unauthorized hook 处理
+      if (response.status === 401) {
+        return response
+      }
+
       const { message, code } = formatNetworkError(_response, _options.locale)
       throw new RequestError(message, {
         code,
@@ -85,7 +90,7 @@ function createResponseParserHook(): AfterResponseHook {
       const errorCode = jsonObj?.[errorCodeField]
 
       throw new RequestError(errorMsg, {
-        isBusinessError: false,
+        isBusinessError: true,
         options: _options,
         code: errorCode as string | number,
         raw: json,

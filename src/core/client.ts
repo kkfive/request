@@ -103,13 +103,19 @@ class Request {
       if (config.unwrap) {
         finalConfig = {
           ...config,
-          responseParser: baseParser,
+          responseParser: {
+            ...baseParser,
+            responseReturn: 'data' as const,
+          },
         }
       }
       else {
         finalConfig = {
           ...config,
-          responseParser: { responseReturn: 'body' as const },
+          responseParser: {
+            ...baseParser,
+            responseReturn: 'body' as const,
+          },
         }
       }
     }
