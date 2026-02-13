@@ -1,5 +1,4 @@
-import { isPlainObject } from './isPlainObject'
-import { isUnsafeProperty } from './isUnsafeProperty'
+import { isPlainObject, isUnsafeProperty } from './predicates'
 /**
  * Merges the properties of the source object into the target object.
  *
