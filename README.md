@@ -1,6 +1,70 @@
 # @kkfive/request
 
-基于 [ky](https://github.com/sindresorhus/ky) 的轻量级 HTTP 客户端封装，提供开箱即用的 Token 注入、响应解析、生命周期回调等功能。
+基于 [ky](https://github.com/sindresorhus/ky) 的轻量级 HTTP 客户端封装层，专注于业务层请求封装。
+
+## 项目定位
+
+**kk-request 是一个封装层，不是完整的 HTTP 客户端**。它专注于提供业务层的请求封装能力：
+
+- ✅ Token 注入（支持 refresh token 自动刷新）
+- ✅ 响应解析
+- ✅ 业务错误处理
+- ✅ 生命周期回调
+- ✅ 国际化错误消息
+
+**高级功能交由专业工具处理**：
+
+- 缓存、重试、去重 → [@tanstack/query](https://tanstack.com/query)
+- HTTP 请求、超时、取消 → [ky](https://github.com/sindresorhus/ky)
+
+## 两种使用方式
+
+### 1. 简单项目直接使用
+
+适合不需要复杂功能的项目，通过简单配置即可开箱即用：
+
+```typescript
+const http = createClient({
+  prefixUrl: 'https://api.example.com',
+  auth: { getToken: () => localStorage.getItem('token') },
+  responseParser: { responseReturn: 'data' },
+})
+
+const users = await http.get<User[]>('/users')
+```
+
+### 2. 复杂项目配合上层框架
+
+与 @tanstack/query 配合使用，职责分工清晰：
+
+```typescript
+// kk-request 处理业务层封装
+const http = createClient({ /* ... */ })
+
+// @tanstack/query 处理缓存、重试等
+const { data } = useQuery({
+  queryKey: ['users'],
+  queryFn: () => http.get<User[]>('/users'),
+  retry: 3,           // 由 @tanstack/query 处理重试
+  staleTime: 60000,   // 由 @tanstack/query 处理缓存
+})
+```
+
+## 设计理念
+
+1. **专注封装层职责** - 只做业务层封装，不越界
+2. **充分利用 ky** - ky 已有的功能无需重复实现
+3. **与上层框架配合** - 高级功能交由 @tanstack/query 等框架处理
+4. **二次封装友好** - 提供灵活的 Hooks 系统
+
+## 为什么不实现缓存、重试等功能？
+
+- **缓存** - @tanstack/query 提供了更强大的缓存能力（staleTime、cacheTime、invalidation）
+- **重试** - ky 已支持重试，@tanstack/query 提供了更灵活的重试策略
+- **去重** - @tanstack/query 自动合并相同的并发请求
+- **状态管理** - @tanstack/query 提供了完整的请求状态管理
+
+这些功能由专业工具处理，效果更好，也避免了功能重复和职责混乱。
 
 ## 安装
 
@@ -46,6 +110,56 @@ const http = createClient({
   },
   // 额外 headers
   getHeaders: () => ({ terminal: 'web' }),
+})
+```
+
+### Refresh Token 自动刷新
+
+支持 token 过期自动刷新，防止并发请求重复刷新。当多个请求同时遇到 401 时，只会触发一次 token 刷新，其他请求会等待刷新完成后自动重试。
+
+```typescript
+const http = createClient({
+  auth: {
+    getToken: () => localStorage.getItem('access_token'),
+    refreshToken: {
+      getRefreshToken: () => localStorage.getItem('refresh_token')!,
+      refresh: async (refreshToken) => {
+        const res = await fetch('/api/refresh', {
+          method: 'POST',
+          body: JSON.stringify({ refreshToken }),
+        })
+        const { accessToken } = await res.json()
+        return accessToken
+      },
+      onRefreshSuccess: (newToken) => {
+        localStorage.setItem('access_token', newToken)
+      },
+      onRefreshFail: () => {
+        // 跳转到登录页
+        window.location.href = '/login'
+      },
+    },
+  },
+})
+```
+
+**特性**：
+- ✅ 自动检测 401 响应并刷新 token
+- ✅ 并发请求去重，多个 401 只刷新一次
+- ✅ 刷新成功后自动重试原请求
+- ✅ 支持异步回调（`onRefreshSuccess` 可以是 async 函数）
+- ✅ FormData 上传自动优化，跳过 body clone 以减少内存占用
+
+### 国际化错误消息
+
+支持中英文错误消息：
+
+```typescript
+const http = createClient({
+  locale: 'en', // 'zh' | 'en'，默认 'zh'
+  responseParser: {
+    responseReturn: 'data',
+  },
 })
 ```
 
@@ -141,6 +255,7 @@ const text = await http.raw.get('/markdown').text()
 | `responseParser` | `ResponseParserOptions` | - | 响应解析配置 |
 | `auth` | `AuthOptions` | - | 认证配置 |
 | `getHeaders` | `() => Record<string, string>` | - | 动态获取额外 headers |
+| `locale` | `'zh' \| 'en'` | `'zh'` | 错误消息语言 |
 | `onRequest` | `(method, url) => void` | - | 请求发送前回调 |
 | `onResponse` | `(method, url, status) => void` | - | 响应返回后回调 |
 | `onError` | `(error, response?) => void` | - | 错误发生时回调 |
@@ -153,6 +268,16 @@ const text = await http.raw.get('/markdown').text()
 | `getToken` | `() => string \| null \| Promise<string \| null>` | - | 获取 token 函数 |
 | `headerName` | `string` | `'Authorization'` | token header 名称 |
 | `scheme` | `string \| null` | `'Bearer'` | token 前缀，null 表示不加前缀 |
+| `refreshToken` | `RefreshTokenOptions` | - | refresh token 配置 |
+
+#### RefreshTokenOptions
+
+| 选项 | 类型 | 说明 |
+|------|------|------|
+| `getRefreshToken` | `() => string \| Promise<string>` | 获取 refresh token 函数 |
+| `refresh` | `(refreshToken: string) => Promise<string>` | 刷新 token 函数，返回新的 access token |
+| `onRefreshSuccess` | `(newToken: string) => void` | token 刷新成功回调 |
+| `onRefreshFail` | `(error: Error) => void` | token 刷新失败回调 |
 
 #### ResponseParserOptions
 

@@ -9,6 +9,8 @@ export default antfu(
   {
     ignores: [
       'README.md',
+      'CLAUDE.md',
+      '**/docs',
     ],
   },
 )
