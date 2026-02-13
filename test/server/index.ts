@@ -167,6 +167,29 @@ export function startServer(): Promise<string> {
         res.statusCode = 401
         res.end(JSON.stringify({ message: '未授权或登录已过期' }))
       }
+      else if (url.pathname === '/auth/protected') {
+        // 模拟需要 token 的受保护端点
+        const authorization = req.headers.authorization || ''
+        if (authorization.includes('new-token')) {
+          // 刷新后的新 token，返回成功
+          res.statusCode = 200
+          res.end(JSON.stringify({
+            code: 0,
+            success: true,
+            data: { id: 1, name: 'user' },
+          }))
+        }
+        else {
+          // 旧 token 或无 token，返回 401
+          res.statusCode = 401
+          res.end(JSON.stringify({ message: '未授权或登录已过期' }))
+        }
+      }
+      else if (url.pathname === '/always-401') {
+        // 总是返回 401，用于测试无限重试防护
+        res.statusCode = 401
+        res.end(JSON.stringify({ message: '未授权' }))
+      }
       else if (url.pathname === '/error/http/403') {
         res.statusCode = 403
         res.end(JSON.stringify({ message: '没有权限访问该资源' }))

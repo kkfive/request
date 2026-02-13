@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { to } from '../src'
-import { isFunction } from '../src/utils/isFunction'
-import { isPlainObject } from '../src/utils/isPlainObject'
-import { isUnsafeProperty } from '../src/utils/isUnsafeProperty'
-import { merge } from '../src/utils/merge'
+import { isFunction, isPlainObject, isUnsafeProperty, merge } from '../src/utils'
 
 describe('to 工具函数', () => {
   it('promise 成功时应返回 [null, data]', async () => {
@@ -93,7 +90,7 @@ describe('merge 工具函数', () => {
 
   it('source 值为 undefined 时不应覆盖 target', () => {
     const target = { a: 1 }
-    const source = { a: undefined }
+    const source = { a: undefined } as { a: number | undefined }
     const result = merge(target, source)
 
     expect(result.a).toBe(1)

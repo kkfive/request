@@ -1,3 +1,4 @@
+import type { EchoData } from './types'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { createClient, Request } from '../src'
 
@@ -76,8 +77,8 @@ describe('createClient 工厂函数', () => {
         },
       })
 
-      const result1 = await client1.get('/success')
-      const result2 = await client2.get('/success')
+      const result1 = await client1.get<string>('/success')
+      const result2 = await client2.get<{ success: boolean, data: string }>('/success')
 
       // client1 返回 data 字段
       expect(typeof result1).toBe('string')
@@ -106,7 +107,7 @@ describe('createClient 工厂函数', () => {
         },
       })
 
-      const result = await client.get('/auth/check')
+      const result = await client.get<EchoData>('/auth/check')
       expect(result.authorization).toBe('Bearer test-token')
     })
 
@@ -126,8 +127,8 @@ describe('createClient 工厂函数', () => {
         },
       })
 
-      const result = await client.get('/headers/check')
-      expect(result.headers['x-custom-header']).toBe('custom-value')
+      const result = await client.get<EchoData>('/headers/check')
+      expect(result.headers?.['x-custom-header']).toBe('custom-value')
     })
 
     it('应正确应用 responseParser 配置', async () => {
@@ -143,7 +144,7 @@ describe('createClient 工厂函数', () => {
         },
       })
 
-      const result = await client.get('/custom-code')
+      const result = await client.get<string>('/custom-code')
       expect(result).toBe('custom code response')
     })
   })
