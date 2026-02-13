@@ -1692,7 +1692,7 @@ describe('request 核心功能测试', () => {
       expect(refreshCount).toBe(1) // 只刷新一次
       expect(onUnauthorized).toHaveBeenCalled() // 触发 onUnauthorized
       // 应该返回 401 响应或抛出错误
-      expect(error || response?.status === 401).toBeTruthy()
+      expect(error || (response as any)?.status === 401).toBeTruthy()
     })
 
     it('retry 请求不应包含任何内部标记 header', async () => {
@@ -2075,6 +2075,7 @@ describe('request 核心功能测试', () => {
       const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       let cloneCallCount = 0
 
+      // @ts-expect-error - Mocking clone for testing
       globalThis.Request.prototype.clone = function () {
         cloneCallCount++
         // 只在第一次调用时抛出错误（auth hook 的调用）
@@ -2107,6 +2108,7 @@ describe('request 核心功能测试', () => {
         )
       }
       finally {
+        // @ts-expect-error - Restoring original clone
         globalThis.Request.prototype.clone = originalClone
         consoleWarnSpy.mockRestore()
       }

@@ -53,8 +53,8 @@ function createUnauthorizedHook(
           if (!refreshPromise) {
             isRefreshInitiator = true // 标记为发起者
             refreshPromise = (async () => {
-              const refreshToken = await auth.refreshToken.getRefreshToken()
-              return await auth.refreshToken.refresh(refreshToken)
+              const refreshToken = await auth.refreshToken!.getRefreshToken()
+              return await auth.refreshToken!.refresh(refreshToken)
             })()
           }
           newToken = await refreshPromise
