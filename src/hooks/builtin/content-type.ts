@@ -5,7 +5,7 @@ import type { BeforeRequestHook } from 'ky'
  * 仅当请求没有设置 Content-Type 且请求体不是 FormData 时设置默认值
  */
 function createContentTypeHook(): BeforeRequestHook {
-  return (request: globalThis.Request, options: { body?: unknown }) => {
+  return async (request: globalThis.Request, options: { body?: unknown }) => {
     // FormData 不需要设置 Content-Type，让浏览器/fetch 自动设置（包含 boundary）
     if (options.body instanceof FormData) {
       return
