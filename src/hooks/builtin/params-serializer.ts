@@ -6,7 +6,7 @@ import qs from 'qs'
  * 参数序列化 Hook
  * 将 params 对象序列化为 URL 查询字符串
  */
-const paramsSerializerHook: BeforeRequestHook = (request, options) => {
+const paramsSerializerHook: BeforeRequestHook = async (request, options) => {
   const custom = options as RequestConfig
   if (custom.params) {
     const search = qs.stringify(custom.params, {
