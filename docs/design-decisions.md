@@ -2,7 +2,7 @@
 
 [← 返回 CLAUDE.md](../CLAUDE.md)
 
-本文档记录了 kk-request 的 4 个关键设计决策及其理由。
+本文档记录了 kk-request 的关键设计决策及其理由。
 
 ---
 
@@ -22,7 +22,7 @@
 
 ### 实现位置
 - `src/hooks/registry.ts` - Hook 注册和解析
-- `src/hooks/builtin/` - 内置 hooks 实现
+- `src/hooks/*.ts` - 内置 hooks 实现
 
 ### 示例
 
@@ -47,95 +47,75 @@ createClient({
 })
 ```
 
+> ⚠️ ky 2.0 的 hook 采用 **state 对象**签名 `({ request, options, response, retryCount }) => ...`，
+> 不再是 1.x 的位置参数 `(request, options, response) => ...`。编写自定义 hook 时请使用前者。
+
 ---
 
-## 决策 2：为什么使用 WeakMap 缓存请求 body？
+## 决策 2：401 刷新重试为什么交给 ky 原生 `ky.retry()`？
 
 ### 问题
-401 retry 时，Request body 已被消费，无法重新发送
+access token 过期（401）时，如何用刷新后的新 token 自动重发原请求？
 
 ### 方案
-在 auth hook 中克隆 body 并使用 WeakMap 缓存
+在 `afterResponse` hook 中刷新 token，然后返回 **`ky.retry({ request })`**，由 ky 完成重发。
 
 ### 理由
-- **支持 retry**：缓存的 body 可以在 401 时重新使用
-- **自动清理**：WeakMap 在 Request 对象被 GC 时自动清理缓存
-- **内存优化**：FormData 跳过克隆，避免大文件内存压力
+- **复用 ky 的重试机制**：ky 内部负责重发、重试计数与请求 body 处理，无需自己造轮子
+- **强制重试跳过 method 检查**：`ky.retry()` 产生的 `ForceRetryError` 会跳过默认的 method 白名单，因此 **POST / PUT / FormData 同样能重试**
+- **用 `retryCount` 防无限循环**：`retryCount > 0` 即说明是重试请求，直接放行，无需额外的标记 header 或标记 hook
+- **不污染 HTTP headers**：完全在前端完成，不触发 CORS 预检
 
 ### 实现位置
-`src/hooks/builtin/auth.ts`（查看 `requestBodyCache` 声明和使用）
+`src/hooks/unauthorized.ts`（查看 `ky.retry({ request })` 与 `retryCount` 判定）
 
 ### 代码示例
 
 ```typescript
-// 用于缓存请求 body 的 WeakMap
-const requestBodyCache = new WeakMap<globalThis.Request, globalThis.Request>()
+return async ({ request, response, retryCount }) => {
+  if (response.status !== 401)
+    return response
 
-// 在 auth hook 中克隆并缓存
-if (auth?.refreshToken && request.method !== 'GET' && request.body) {
-  const isFormData = options?.body instanceof FormData
-  if (!isFormData) {
-    try {
-      const clonedRequest = request.clone()
-      requestBodyCache.set(request, clonedRequest)
-    } catch (error) {
-      console.warn('[kk-request] Failed to clone request body for retry:', error)
-    }
+  // 已重试过仍 401 → 放弃，交给 ky 抛出 HTTPError(401)
+  if (retryCount > 0) {
+    onUnauthorized?.()
+    return response
   }
+
+  if (auth?.refreshToken) {
+    const newToken = await dedupedRefresh() // 见决策 3
+    // 显式写入新 token（重试不会再执行 beforeRequest 的 auth hook）
+    const headers = new Headers(request.headers)
+    headers.set('Authorization', `Bearer ${newToken}`)
+    return ky.retry({ request: new Request(request, { headers }), code: 'TOKEN_REFRESHED' })
+  }
+
+  onUnauthorized?.()
+  return response // 无 refreshToken → 交给 ky 抛出 HTTPError(401)
 }
 ```
 
-### 限制
-- **FormData 不支持 retry**：大文件上传跳过克隆
-- **新 Request 破坏缓存**：在 `extendedHooks.beforeRequest.append` 中返回新 Request 会导致缓存失效
-
-详见：`docs/constraints.md`
+### 历史说明
+早期版本曾用 **WeakMap 缓存 clone 的请求 body** + **`__kkRetry` 标记 hook** + 手动调用 `kyInstance(newRequest)` 来实现重试。
+迁移到 ky 2.0 后改用 `ky.retry()`，上述机制全部移除，同时消除了「FormData 无法 retry」「返回新 Request 破坏缓存」两条历史限制。
 
 ---
 
 ## 决策 3：为什么 refresh token 使用闭包级 Promise？
 
 ### 问题
-并发请求同时遇到 401 时，会重复刷新 token
+并发请求同时遇到 401 时，会重复刷新 token。ky 原生的重试**不会**对并发刷新做去重。
 
 ### 方案
-使用闭包级 `refreshPromise` 实现去重
+在 hook 工厂内用闭包级 `refreshPromise` 实现去重，叠加在 `ky.retry()` 之上。
 
 ### 理由
-- **去重**：多个 401 只触发一次刷新
-- **等待**：其他请求等待刷新完成
-- **自动重试**：刷新成功后所有请求自动重试
+- **去重**：多个并发 401 只触发一次 `refresh()`
+- **等待**：后到的请求等待同一个刷新 Promise 完成
+- **各自重试**：刷新完成后，每个请求各自用新 token 通过 `ky.retry()` 重发
 
 ### 实现位置
-`src/hooks/builtin/unauthorized.ts`（查看 `createUnauthorizedHook` 函数中的 `refreshPromise` 闭包变量）
-
-### 代码示例
-
-```typescript
-function createUnauthorizedHook(...): AfterResponseHook {
-  // 闭包级 Promise，每个 hook 实例独立
-  let refreshPromise: Promise<string> | null = null
-
-  return async (request, options, response) => {
-    if (response.status === 401) {
-      // 标记是否为本次刷新的发起者（函数内部声明，每个请求独立）
-      let shouldTriggerCallback = false
-      // 如果已有刷新请求，等待它完成；否则立即创建 Promise 占位
-      if (!refreshPromise) {
-        shouldTriggerCallback = true
-        refreshPromise = (async () => {
-          const refreshToken = await auth.refreshToken.getRefreshToken()
-          return await auth.refreshToken.refresh(refreshToken)
-        })()
-      }
-      const newToken = await refreshPromise
-      refreshPromise = null
-
-      // 重试请求...
-    }
-  }
-}
-```
+`src/hooks/unauthorized.ts`（查看 `createUnauthorizedHook` 中的 `refreshPromise` 闭包变量）
 
 ### 效果
 ```
@@ -143,65 +123,51 @@ function createUnauthorizedHook(...): AfterResponseHook {
 请求 B 遇到 401 → 发现 refreshPromise 存在 → 等待
 请求 C 遇到 401 → 发现 refreshPromise 存在 → 等待
   ↓
-刷新完成 → 请求 A/B/C 都使用新 token 重试
+刷新完成 → A/B/C 各自用新 token 通过 ky.retry() 重发
 ```
 
 ---
 
-## 决策 4：为什么使用 Hook 标记而不是 Header 标记？
+## 决策 4：错误体系为什么区分 `BusinessError` 与 ky 原生错误？
 
 ### 问题
-如何标识 retry 请求，避免无限重试？
+请求失败有两类性质完全不同的原因：**传输层失败**（非 2xx、网络、超时）与**业务层失败**（HTTP 2xx，但响应体业务字段 `code` 不等于 `successCode`）。如何让上层拿到完整、可区分的错误信息？
 
 ### 方案
-在 hook 函数上添加 `__kkRetry` 标记
+- **传输层错误**：原样透传 ky 的原生错误类型，不做任何包装或归一
+  （`HTTPError` / `NetworkError` / `TimeoutError` / `ForceRetryError` / `KyError`，均从本包重新导出）
+- **业务层错误**：抛出 kk-request 独有的 **`BusinessError`**（携带业务 `code`、原始 `raw`、`response`）
 
 ### 理由
-- **避免 CORS 预检**：自定义 header 会触发 OPTIONS 请求
-- **减少 RTT**：避免额外的网络往返
-- **纯前端**：不污染 HTTP headers
+- **信息完整**：ky 的 `HTTPError` 自带 `response`、预解析的 `data`、`request`、`options`，包装成通用错误反而丢信息
+- **职责清晰**：传输层是 ky 的领域，业务层是 kk-request 的领域；`instanceof BusinessError` 即业务错误判定
+- **可用官方守卫**：消费方可直接用 `isHTTPError` / `isTimeoutError` 等 ky 类型守卫
 
 ### 实现位置
-`src/hooks/builtin/unauthorized.ts`（查看 `retryMarkerHook` 和 `__kkRetry` 标记）
+- `src/errors/business-error.ts` - `BusinessError` 类（`errors/` 为目录，便于后续新增其它错误类型）
+- `src/client/request.ts` - catch 块原样抛出，仅触发生命周期回调
+- `src/hooks/response-parser.ts` - 仅在业务 code 不符时抛出 `BusinessError`
 
-### 代码示例
+### 消费方示例
 
 ```typescript
-// 创建标记 hook
-const retryMarkerHook = async () => {
-  // No-op hook，仅用于标记
+import { BusinessError, isHTTPError, isTimeoutError } from '@kkfive/request'
+
+try {
+  const data = await http.get('/users')
 }
-;(retryMarkerHook as any).__kkRetry = true
-
-// 检查是否为 retry 请求
-const isRetryRequest = options.hooks?.beforeRequest?.some(
-  (hook: any) => hook.__kkRetry === true
-)
-
-if (isRetryRequest) {
-  // 这是 retry 请求，不再重试
-  return response
+catch (e) {
+  if (e instanceof BusinessError) {
+    // 业务错误：e.code（业务码）、e.raw（原始响应体）
+  }
+  else if (isHTTPError(e)) {
+    // HTTP 错误：e.response.status、e.data
+  }
+  else if (isTimeoutError(e)) {
+    // 超时
+  }
 }
 ```
-
-### 对比
-
-**使用 Header 标记**（❌ 不推荐）：
-```typescript
-// 会触发 CORS 预检
-request.headers.set('X-Retry', 'true')
-```
-
-**使用 Hook 标记**（✅ 推荐）：
-```typescript
-// 纯前端，不触发 CORS 预检
-;(retryMarkerHook as any).__kkRetry = true
-```
-
-### 优势
-- 完全纯前端，避免 CORS 预检
-- 减少 1 RTT（往返时间）
-- 不污染 HTTP headers
 
 ---
 

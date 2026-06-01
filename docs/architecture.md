@@ -6,34 +6,42 @@
 
 ```
 src/
-├── core/
-│   └── client.ts          # Request 类和 createClient 工厂函数
-├── hooks/
-│   ├── registry.ts        # Hook 注册和解析逻辑
-│   └── builtin/           # 内置 hooks
-│       ├── auth.ts        # 认证 hook（token 注入 + WeakMap 缓存）
-│       ├── content-type.ts # Content-Type 自动设置
-│       ├── params-serializer.ts # URL 参数序列化
-│       ├── response-parser.ts   # 响应解析
-│       └── unauthorized.ts      # 401 处理和 token 刷新
-├── sse/
-│   └── stream.ts          # SSE 流式请求（SSEStream 类 + 工厂函数）
-├── types/
-│   ├── options.ts         # 配置选项类型
-│   ├── hooks.ts           # Hook 系统类型
-│   ├── response.ts        # 响应解析类型
-│   └── sse.ts             # SSE 类型
+├── index.ts                # 公共导出入口
+├── client/
+│   ├── index.ts            # 桶导出
+│   └── request.ts          # Request 类和 createClient 工厂函数
 ├── errors/
-│   └── request-error.ts   # 统一错误类
+│   ├── index.ts            # 桶导出
+│   └── business-error.ts   # BusinessError 业务错误类
+├── hooks/
+│   ├── index.ts            # 桶导出
+│   ├── registry.ts         # Hook 注册和解析逻辑
+│   ├── auth.ts             # 认证 hook（token 注入）
+│   ├── content-type.ts     # Content-Type 自动设置
+│   ├── params-serializer.ts# URL 参数序列化
+│   ├── response-parser.ts  # 响应解析 + 业务错误判定
+│   └── unauthorized.ts     # 401 处理和 token 刷新重试
+├── sse/
+│   ├── index.ts            # 桶导出
+│   ├── stream.ts           # SSE 流式请求（SSEStream 类 + 工厂函数）
+│   └── types.ts            # SSE 类型（与实现就近）
+├── types/
+│   ├── index.ts            # 桶导出
+│   ├── options.ts          # 配置选项类型
+│   ├── hooks.ts            # Hook 系统类型
+│   └── response.ts         # 响应解析类型
 └── utils/
-    ├── merge.ts           # 配置合并
-    ├── to.ts              # 错误处理工具
-    └── predicates.ts      # 类型判断
+    ├── index.ts
+    ├── merge.ts            # 配置合并
+    ├── predicates.ts       # 类型判断
+    └── to.ts               # await-to 错误处理工具
 ```
+
+> `client/` 与 `errors/` 采用目录组织，便于后续新增 client 变体或错误类型时**只新增文件、不重构**。
 
 ## 核心模块
 
-### Request 类 (`src/core/client.ts`)
+### Request 类 (`src/client/request.ts`)
 
 **职责**：请求客户端主类，封装 ky 实例
 
@@ -47,18 +55,20 @@ src/
 
 **实现细节**：
 ```typescript
-// src/core/client.ts - Request 类构造函数
+// src/client/request.ts - Request 类构造函数
 constructor(requestConfig?: RequestConfig) {
-  // 使用 getter 函数延迟绑定，确保 hooks 中使用的是包含完整 hooks 链的实例
-  const getKyInstance = () => finalInstance
-  const hooks = resolveHooks(mergedConfig, getKyInstance)
-  finalInstance = ky.create({ ...mergedConfig, hooks })
+  const mergedConfig = merge(defaultConfig, requestConfig || {})
+  // 401 重试改用 ky 原生 ky.retry()，hooks 无需回引实例，直接创建即可
+  const hooks = resolveHooks(mergedConfig)
+  this.instance = ky.create({ ...mergedConfig, hooks })
 }
 ```
 
 ### Hook 系统 (`src/hooks/`)
 
 **职责**：可插拔的请求/响应处理管道
+
+> ky 2.0 的 hook 采用 **state 对象**签名：`({ request, options, response, retryCount }) => ...`
 
 **执行顺序**：
 ```
@@ -75,19 +85,19 @@ afterResponse:
 
 **内置 Hooks**：
 1. **paramsSerializer** - URL 参数序列化（使用 qs）
-2. **auth** - Token 注入 + WeakMap 缓存
+2. **auth** - Token 注入（+ 额外 headers 注入）
 3. **contentType** - Content-Type 自动设置
-4. **unauthorized** - 401 处理 + token 刷新
-5. **responseParser** - 响应解析
+4. **unauthorized** - 401 处理 + token 刷新重试（基于 `ky.retry()`）
+5. **responseParser** - 响应解析 + 业务错误判定
 
-### 响应解析 (`src/hooks/builtin/response-parser.ts`)
+### 响应解析 (`src/hooks/response-parser.ts`)
 
 **职责**：解析响应体，支持三种返回模式
 
 **三种模式**：
 1. **raw** - 返回原始 Response 对象
 2. **body** - 返回完整响应体 `{ code, data, message }`
-3. **data** - 只返回 data 字段（默认）
+3. **data** - 只返回 data 字段（并校验业务 code）
 
 **配置选项**：
 - `codeField` - 业务状态码字段（默认 `'code'`）
@@ -96,22 +106,62 @@ afterResponse:
 - `errorMessageField` - 错误消息字段（默认 `'message'`）
 
 **请求级控制**：
-- `unwrap: true` - 使用实例配置的模式
+- `unwrap: true` - 使用实例配置的 `data` 模式
 - `unwrap: false` - 返回完整响应体
 
-### 错误处理 (`src/errors/request-error.ts`)
+### 错误处理 (`src/errors/business-error.ts` + ky 原生错误)
 
-**RequestError 类**：统一错误格式
+错误分两层，互不混淆：
 
-**关键字段**：
-- `code` - 错误代码
-- `raw` - 原始错误对象
-- `response` - HTTP 响应对象
-- `isBusinessError` - 是否为业务错误
+- **业务错误 `BusinessError`**：HTTP 2xx 但业务 `code` 不符。携带 `code`（业务码）、`raw`（原始响应体）、`response`。
+- **传输层错误**：原样透传 ky 原生类型 —— `HTTPError`（非 2xx）、`NetworkError`、`TimeoutError`、`ForceRetryError`、`KyError`，均从本包重新导出，配合 `isHTTPError` 等守卫使用。
 
-**区分**：
-- 网络错误：`isBusinessError = false`
-- 业务错误：`isBusinessError = true`
+`Request.request()` 的 catch 块**不做归一/包装**，仅触发 `onError` 等生命周期回调后原样抛出。
+
+## 数据流
+
+### 请求流程
+
+```
+用户调用 http.get('users')
+  ↓
+Request.request() 方法（触发 onRequest 回调）
+  ↓
+执行 beforeRequest hooks（paramsSerializer → auth → contentType）
+  ↓
+ky 发送 HTTP 请求
+  ↓
+执行 afterResponse hooks（unauthorized → responseParser）
+  ↓
+触发 onResponse 回调 → 返回数据
+```
+
+### 错误流程
+
+```
+业务错误（2xx + code≠success）→ responseParser 抛出 BusinessError
+传输错误（非 2xx / 网络 / 超时）→ ky 抛出 HTTPError / NetworkError / TimeoutError
+  ↓
+Request.request() catch：触发 onError / makeErrorMessage 回调
+  ↓
+原样抛出（不归一），上层用 instanceof BusinessError / isHTTPError 区分
+```
+
+### 401 刷新重试流程
+
+```
+收到 401 响应
+  ↓
+unauthorized hook 检测（retryCount === 0）
+  ↓
+调用 refreshToken.refresh()（并发去重）
+  ↓
+触发 onRefreshSuccess
+  ↓
+return ky.retry({ request: 携带新 token })  ← 由 ky 完成重发
+  ↓
+重试响应（retryCount > 0；仍 401 则交给 ky 抛出 HTTPError）
+```
 
 ## Hook 系统实现
 
@@ -122,10 +172,9 @@ afterResponse:
 const beforeRequestConfig = resolveHookArray(extendedHooks?.beforeRequest)
 const afterResponseConfig = resolveHookArray(extendedHooks?.afterResponse)
 
-// 2. 构建 beforeRequest hooks
+// 2. 构建 beforeRequest hooks（state 对象签名）
 const beforeRequest: BeforeRequestHook[] = [
   ...beforeRequestConfig.prepend,
-  // 内置 hooks（可禁用/替换）
   paramsSerializerHook,
   createAuthHook(auth, getHeaders),
   createContentTypeHook(),
@@ -135,8 +184,7 @@ const beforeRequest: BeforeRequestHook[] = [
 // 3. 构建 afterResponse hooks
 const afterResponse: AfterResponseHook[] = [
   ...afterResponseConfig.prepend,
-  // 内置 hooks（可禁用/替换）
-  createUnauthorizedHook(onUnauthorized, auth, getKyInstance),
+  createUnauthorizedHook(onUnauthorized, auth),
   createResponseParserHook(),
   ...afterResponseConfig.append,
 ]
@@ -147,10 +195,7 @@ const afterResponse: AfterResponseHook[] = [
 **简单控制**（`features`）：
 ```typescript
 createClient({
-  features: {
-    enableContentType: false,
-    enableParamsSerializer: false,
-  },
+  features: { enableContentType: false, enableParamsSerializer: false },
 })
 ```
 
@@ -158,68 +203,9 @@ createClient({
 ```typescript
 createClient({
   extendedHooks: {
-    control: {
-      disable: ['contentType', 'paramsSerializer'],
-      replace: {
-        auth: myCustomAuthHook,
-      },
-    },
+    control: { disable: ['contentType'], replace: { auth: myCustomAuthHook } },
   },
 })
-```
-
-## 数据流
-
-### 请求流程
-
-```
-用户调用 http.get('/api')
-  ↓
-Request.request() 方法
-  ↓
-触发 onRequest 回调
-  ↓
-执行 beforeRequest hooks
-  ↓
-ky 发送 HTTP 请求
-  ↓
-执行 afterResponse hooks
-  ↓
-触发 onResponse 回调
-  ↓
-返回数据给用户
-```
-
-### 错误流程
-
-```
-HTTP 错误 / 业务错误
-  ↓
-捕获异常
-  ↓
-创建 RequestError
-  ↓
-触发 onError 回调
-  ↓
-抛出异常给用户
-```
-
-### 401 Retry 流程
-
-```
-收到 401 响应
-  ↓
-unauthorized hook 检测
-  ↓
-调用 refreshToken.refresh()
-  ↓
-获取新 token
-  ↓
-触发 onRefreshSuccess
-  ↓
-使用新 token 重试请求
-  ↓
-返回重试结果
 ```
 
 ---

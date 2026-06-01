@@ -4,6 +4,9 @@
 
 本文档介绍如何开发自定义 Hook，包括推荐模式、高级用法和实际场景示例。
 
+> ⚠️ **ky 2.0 的 hook 采用 state 对象签名**：`({ request, options, response, retryCount }) => ...`，
+> 不再是 1.x 的位置参数 `(request, options, response) => ...`。本文示例均使用 state 对象签名。
+
 ---
 
 ## 推荐模式：Hook 工厂函数
@@ -26,7 +29,7 @@ function createCustomHeaderHook(config: {
   getValue: () => string | Promise<string>
   condition?: (request: Request) => boolean
 }): BeforeRequestHook {
-  return async (request: globalThis.Request, options: any) => {
+  return async ({ request }) => {
     // 条件性执行
     if (config.condition && !config.condition(request)) {
       return
@@ -37,10 +40,7 @@ function createCustomHeaderHook(config: {
     if (value) {
       request.headers.set(config.headerName, value)
     }
-
-    // ⚠️ 不要返回新的 Request（会破坏 WeakMap 缓存）
-    // ❌ return new Request(request, { headers: ... })
-    // ✅ 直接修改 headers
+    // 直接修改 headers 即可；如需替换整个请求，也可 `return new Request(...)`（ky 2.0 支持）
   }
 }
 
@@ -52,7 +52,7 @@ const http = createClient({
         createCustomHeaderHook({
           headerName: 'X-Request-ID',
           getValue: () => crypto.randomUUID(),
-          condition: (req) => req.method !== 'GET', // 只对非 GET 请求添加
+          condition: req => req.method !== 'GET', // 只对非 GET 请求添加
         }),
       ],
     },
@@ -72,7 +72,7 @@ function createRequestCounterHook(options: {
 }): BeforeRequestHook {
   let requestCount = 0 // 闭包状态
 
-  return async (request: globalThis.Request) => {
+  return async ({ request }) => {
     requestCount++
     request.headers.set('X-Request-Count', String(requestCount))
 
@@ -94,13 +94,13 @@ function createResponseLoggerHook(config: {
   logLevel: 'info' | 'debug'
   filter?: (response: Response) => boolean
 }): AfterResponseHook {
-  return async (request, options, response) => {
+  return async ({ request, response }) => {
     // 条件性执行
     if (config.filter && !config.filter(response)) {
       return response
     }
 
-    // 需要读取 body 时先 clone
+    // 需要读取 body 时先 clone（body 只能读取一次）
     const cloned = response.clone()
     const data = await cloned.json().catch(() => null)
 
@@ -113,7 +113,7 @@ function createResponseLoggerHook(config: {
       })
     }
 
-    // 必须返回原始 Response 对象
+    // 必须返回 Response 对象
     return response
   }
 }
@@ -125,7 +125,7 @@ function createResponseLoggerHook(config: {
 import type { BeforeRequestHook } from 'ky'
 
 // 简单场景：直接导出 Hook 函数
-export const timestampHook: BeforeRequestHook = async (request) => {
+export const timestampHook: BeforeRequestHook = async ({ request }) => {
   request.headers.set('X-Timestamp', Date.now().toString())
 }
 
@@ -142,8 +142,8 @@ const http = createClient({
 ### 场景 1：请求 ID 追踪
 
 ```typescript
-function createRequestIdHook() {
-  return async (request: Request) => {
+function createRequestIdHook(): BeforeRequestHook {
+  return async ({ request }) => {
     request.headers.set('X-Request-ID', crypto.randomUUID())
   }
 }
@@ -158,13 +158,15 @@ const http = createClient({
 ### 场景 2：条件性日志记录
 
 ```typescript
-// 只在开发环境记录请求日志
-function createDevLoggerHook(enabled: boolean) {
-  if (!enabled) {
-    return async () => {} // 返回空 Hook
-  }
+import type { AfterResponseHook } from 'ky'
 
-  return async (request: Request, options: any, response: Response) => {
+// 只在开发环境记录请求日志
+function createDevLoggerHook(enabled: boolean): AfterResponseHook {
+  return async ({ request, response }) => {
+    if (!enabled) {
+      return response
+    }
+
     const cloned = response.clone()
     const data = await cloned.json().catch(() => null)
 
@@ -191,14 +193,16 @@ const http = createClient({
 ### 场景 3：动态 Header 注入
 
 ```typescript
+import type { BeforeRequestHook } from 'ky'
+
 // 根据请求 URL 动态添加不同的 headers
 function createDynamicHeaderHook(config: {
   rules: Array<{
     pattern: RegExp
     headers: Record<string, string>
   }>
-}) {
-  return async (request: Request) => {
+}): BeforeRequestHook {
+  return async ({ request }) => {
     const url = request.url
 
     for (const rule of config.rules) {
@@ -218,14 +222,8 @@ const http = createClient({
       append: [
         createDynamicHeaderHook({
           rules: [
-            {
-              pattern: /\/api\/v1\//,
-              headers: { 'X-API-Version': 'v1' },
-            },
-            {
-              pattern: /\/api\/v2\//,
-              headers: { 'X-API-Version': 'v2' },
-            },
+            { pattern: /\/api\/v1\//, headers: { 'X-API-Version': 'v1' } },
+            { pattern: /\/api\/v2\//, headers: { 'X-API-Version': 'v2' } },
           ],
         }),
       ],
@@ -237,7 +235,7 @@ const http = createClient({
 ### 场景 4：性能监控
 
 ```typescript
-// 监控请求耗时
+// 监控请求耗时（用 WeakMap 关联请求与开始时间，注意这是业务侧的计时缓存）
 function createPerformanceHook(options: {
   onSlow?: (duration: number, url: string) => void
   threshold?: number
@@ -245,21 +243,18 @@ function createPerformanceHook(options: {
   const startTimes = new WeakMap<Request, number>()
 
   return {
-    beforeRequest: async (request: Request) => {
+    beforeRequest: async ({ request }) => {
       startTimes.set(request, Date.now())
     },
-    afterResponse: async (request: Request, _options: any, response: Response) => {
+    afterResponse: async ({ request, response }) => {
       const startTime = startTimes.get(request)
       if (startTime) {
         const duration = Date.now() - startTime
-
         if (options.threshold && duration > options.threshold) {
           options.onSlow?.(duration, request.url)
         }
-
         startTimes.delete(request)
       }
-
       return response
     },
   }
@@ -291,11 +286,11 @@ const http = createClient({
 ### 类型定义
 
 ```typescript
-import type { BeforeRequestHook, AfterResponseHook } from 'ky'
+import type { AfterResponseHook, BeforeRequestHook } from 'ky'
 
-// 总是明确类型
+// 总是明确类型（state 对象签名）
 function createMyHook(config: MyConfig): BeforeRequestHook {
-  return async (request, options) => {
+  return async ({ request, options }) => {
     // ...
   }
 }
@@ -305,10 +300,11 @@ function createMyHook(config: MyConfig): BeforeRequestHook {
 
 ```typescript
 function createSafeHook(): BeforeRequestHook {
-  return async (request) => {
+  return async ({ request }) => {
     try {
       // Hook 逻辑
-    } catch (error) {
+    }
+    catch (error) {
       // 记录错误但不阻塞请求
       console.error('[Hook Error]', error)
     }

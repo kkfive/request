@@ -2,67 +2,41 @@
 
 [← 返回 CLAUDE.md](../CLAUDE.md)
 
-本文档列出了开发中最容易遇到的 5 个陷阱，每个陷阱都提供了错误示例、正确示例和详细解释。
+本文档列出开发中最容易遇到的陷阱，每个都提供错误示例、正确示例和详细解释。
 
 ---
 
-## 陷阱 1：在 beforeRequest hook 中返回新的 Request
+## 陷阱 1：使用 ky 1.x 的位置参数 hook 签名
 
 ### 错误示例
 
 ```typescript
-// ❌ 错误：会破坏 WeakMap 缓存，导致 401 retry 失败
-const myHook: BeforeRequestHook = async (request) => {
-  const newHeaders = new Headers(request.headers)
-  newHeaders.set('X-Custom', 'value')
-  return new Request(request, { headers: newHeaders })
+// ❌ 错误：ky 1.x 的位置参数签名，在 ky 2.0 下 request/options/response 全部错位
+const myHook: BeforeRequestHook = async (request, options) => {
+  request.headers.set('X-Custom', 'value') // request 实际是整个 state 对象
 }
 ```
 
 ### 正确示例
 
 ```typescript
-// ✅ 正确：直接修改 headers
-const myHook: BeforeRequestHook = async (request) => {
+// ✅ 正确：ky 2.0 使用 state 对象签名，按需解构
+const myHook: BeforeRequestHook = async ({ request, options }) => {
   request.headers.set('X-Custom', 'value')
 }
 ```
 
 ### 原因
 
-`src/hooks/builtin/auth.ts` 使用 WeakMap 缓存原始 Request 对象：
+ky 2.0 统一将所有 hook 改为单个 **state 对象**参数：
 
-```typescript
-const requestBodyCache = new WeakMap<globalThis.Request, globalThis.Request>()
+- `beforeRequest`：`({ request, options, retryCount })`
+- `afterResponse`：`({ request, options, response, retryCount })`
+- `beforeRetry` / `beforeError`：`({ request, options, error, retryCount })`
 
-// 缓存原始 Request
-requestBodyCache.set(request, clonedRequest)
-```
+仍按位置参数 `(request, options, response)` 编写时，第一个参数拿到的是整个 state 对象，`options`/`response` 为 `undefined`，行为完全错误。
 
-如果返回新的 Request 实例，WeakMap 的键会变化，导致：
-- 401 retry 时找不到缓存的 body
-- POST/PUT 请求 retry 失败
-
-**详见**：[设计决策 - WeakMap 缓存](./design-decisions.md#决策-2为什么使用-weakmap-缓存请求-body)
-
-### 何时可以返回新 Request？
-
-只有在 `extendedHooks.beforeRequest.prepend` 中（auth hook 之前）才可以：
-
-```typescript
-createClient({
-  extendedHooks: {
-    beforeRequest: {
-      prepend: [
-        // ✅ 在 auth hook 之前，可以返回新 Request
-        async (request) => {
-          return new Request(request, { headers: newHeaders })
-        },
-      ],
-    },
-  },
-})
-```
+> ky 2.0 起，beforeRequest 返回新的 `Request` 是被支持的（旧版本因 WeakMap 缓存而禁止，现已移除该限制）。
 
 ---
 
@@ -72,7 +46,7 @@ createClient({
 
 ```typescript
 // ❌ 错误：body 只能读取一次
-const myHook: AfterResponseHook = async (request, options, response) => {
+const myHook: AfterResponseHook = async ({ response }) => {
   const data = await response.json()
   console.log(data)
   return response // body 已被消费，后续无法读取
@@ -83,7 +57,7 @@ const myHook: AfterResponseHook = async (request, options, response) => {
 
 ```typescript
 // ✅ 正确：先 clone
-const myHook: AfterResponseHook = async (request, options, response) => {
+const myHook: AfterResponseHook = async ({ response }) => {
   const cloned = response.clone()
   const data = await cloned.json()
   console.log(data)
@@ -93,23 +67,9 @@ const myHook: AfterResponseHook = async (request, options, response) => {
 
 ### 原因
 
-Response body 是一个流（Stream），只能读取一次。读取后：
-- `response.bodyUsed` 变为 `true`
-- 后续无法再次读取 body
-- 其他 hooks 或用户代码会失败
+Response body 是一个流（Stream），只能读取一次。读取后 `response.bodyUsed` 变为 `true`，后续 hooks 或用户代码再读取会失败。
 
-### 何时需要 clone？
-
-只要需要读取 body，就必须 clone：
-
-```typescript
-// 需要 clone 的场景
-await response.json()
-await response.text()
-await response.blob()
-await response.arrayBuffer()
-await response.formData()
-```
+只要需要读取 body（`json()` / `text()` / `blob()` / `arrayBuffer()` / `formData()`），就必须先 `clone()`。
 
 ---
 
@@ -118,8 +78,6 @@ await response.formData()
 ### 错误示例
 
 ```typescript
-// ⚠️ 注意：回调异常已被隔离（v0.1.1），不会影响 refresh 状态
-// 但仍然建议避免在回调中抛出异常
 createClient({
   auth: {
     refreshToken: {
@@ -135,14 +93,14 @@ createClient({
 ### 正确示例
 
 ```typescript
-// ✅ 正确：捕获回调中的异常
 createClient({
   auth: {
     refreshToken: {
       onRefreshSuccess: (token) => {
         try {
           localStorage.setItem('token', token)
-        } catch (error) {
+        }
+        catch (error) {
           console.error('Failed to save token:', error)
         }
       },
@@ -153,61 +111,50 @@ createClient({
 
 ### 原因
 
-虽然回调异常已被隔离（`src/hooks/builtin/unauthorized.ts` 中的 `onRefreshSuccess` 回调处理），但：
-- 异常会被记录到控制台
-- 可能影响用户体验
-- 最佳实践是在回调中处理异常
+`onRefreshSuccess` / `onRefreshFail` / `onUnauthorized` 等回调的异常已被库内部隔离（不会影响刷新/重试状态），但仍会被打印到控制台。最佳实践是在回调内部自行处理异常。
 
 ### 实现位置
 
-`src/hooks/builtin/unauthorized.ts`（查看 `createUnauthorizedHook` 函数中的回调异常处理）
+`src/hooks/unauthorized.ts`（查看 `safeInvoke` / `safeInvokeAsync` 包装）
 
 ```typescript
-// 回调异常隔离逻辑
-if (isRefreshInitiator) {
-  try {
-    await auth.refreshToken.onRefreshSuccess?.(newToken)
-  } catch (callbackError) {
-    // 回调异常不影响 refresh 成功状态，仅记录错误
-    console.error('[kk-request] onRefreshSuccess callback error:', callbackError)
-  }
+if (isInitiator) {
+  await safeInvokeAsync(
+    () => auth.refreshToken!.onRefreshSuccess?.(newToken),
+    'onRefreshSuccess',
+  )
 }
 ```
 
 ---
 
-## 陷阱 4：在 Hook 中使用 async/await 但不返回 Promise
+## 陷阱 4：afterResponse hook 忘记返回 Response
 
 ### 错误示例
 
 ```typescript
-// ❌ 错误：async 函数必须返回值
-const myHook: AfterResponseHook = async (request, options, response) => {
-  const cloned = response.clone()
-  const data = await cloned.json()
+// ❌ 错误：忘记返回，返回值变成 undefined
+const myHook: AfterResponseHook = async ({ response }) => {
+  const data = await response.clone().json()
   console.log(data)
-  // ❌ 忘记返回 response
+  // ❌ 忘记 return
 }
 ```
 
 ### 正确示例
 
 ```typescript
-// ✅ 正确：必须返回 Response
-const myHook: AfterResponseHook = async (request, options, response) => {
-  const cloned = response.clone()
-  const data = await cloned.json()
+// ✅ 正确：返回 Response（或 ky.retry() 触发重试）
+const myHook: AfterResponseHook = async ({ response }) => {
+  const data = await response.clone().json()
   console.log(data)
-  return response // ✅ 返回原始 response
+  return response
 }
 ```
 
 ### 原因
 
-afterResponse hook 必须返回 Response 对象：
-- 返回值会传递给下一个 hook
-- 最终返回给用户
-- 不返回会导致 `undefined`
+afterResponse hook 的返回值会传递给下一个 hook，最终决定 ky 使用的响应。返回 `Response` 覆盖响应；返回 `ky.retry(...)` 触发强制重试；返回 `undefined`（忘记 return）则可能丢失响应。
 
 ---
 
@@ -216,9 +163,9 @@ afterResponse hook 必须返回 Response 对象：
 ### 错误示例
 
 ```typescript
-// ❌ 错误：修改 options 可能影响其他 hooks
-const myHook: BeforeRequestHook = async (request, options: any) => {
-  options.timeout = 5000 // ❌ 修改共享对象
+// ❌ 错误：ky 2.0 传入 hook 的 options 是被 Object.freeze 冻结的，赋值会抛错或静默失败
+const myHook: BeforeRequestHook = async ({ options }) => {
+  ;(options as any).timeout = 5000
 }
 ```
 
@@ -226,18 +173,15 @@ const myHook: BeforeRequestHook = async (request, options: any) => {
 
 ```typescript
 // ✅ 正确：只读取 options，不修改
-const myHook: BeforeRequestHook = async (request, options: any) => {
-  const timeout = options.timeout || 10000
-  // 使用 timeout，但不修改 options
+const myHook: BeforeRequestHook = async ({ request, options }) => {
+  const timeout = (options as any).timeout || 10000
+  // 如需改变行为，修改 request 或在请求级配置中传入，而非改 options
 }
 ```
 
 ### 原因
 
-`options` 对象在所有 hooks 之间共享：
-- 修改会影响后续 hooks
-- 可能导致不可预测的行为
-- 违反单一职责原则
+ky 2.0 传给 hook 的 `options` 是 `Object.freeze` 后的归一化选项，在所有 hooks 间共享，不应（也无法）被修改。需要传递自定义数据时，使用 ky 的 `context` 选项。
 
 ---
 
@@ -245,11 +189,11 @@ const myHook: BeforeRequestHook = async (request, options: any) => {
 
 在编写 Hook 时，检查以下几点：
 
-- [ ] beforeRequest hook 是否直接修改 request，而不是返回新 Request？
-- [ ] afterResponse hook 读取 body 前是否先 clone？
-- [ ] afterResponse hook 是否返回 Response 对象？
-- [ ] 回调函数中是否捕获了异常？
-- [ ] 是否避免修改 options 对象？
+- [ ] 是否使用 ky 2.0 的 **state 对象签名**（而非位置参数）？
+- [ ] afterResponse hook 读取 body 前是否先 `clone()`？
+- [ ] afterResponse hook 是否返回 Response（或 `ky.retry()`）？
+- [ ] refreshToken 回调中是否捕获了异常？
+- [ ] 是否避免修改（已冻结的）options 对象？
 
 ---
 

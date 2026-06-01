@@ -6,11 +6,10 @@
 
 **kk-request 是一个封装层，不是完整的 HTTP 客户端**。它专注于提供业务层的请求封装能力：
 
-- ✅ Token 注入（支持 refresh token 自动刷新）
-- ✅ 响应解析
-- ✅ 业务错误处理
+- ✅ Token 注入（支持 refresh token 自动刷新，基于 `ky.retry()`）
+- ✅ 响应解析（raw / body / data 三种模式）
+- ✅ 业务错误（`BusinessError`）与 ky 原生传输错误区分
 - ✅ 生命周期回调
-- ✅ 国际化错误消息
 - ✅ SSE 流式请求（基于 [parse-sse](https://github.com/sindresorhus/parse-sse)）
 
 **高级功能交由专业工具处理**：
@@ -26,7 +25,7 @@
 
 ```typescript
 const http = createClient({
-  prefixUrl: 'https://api.example.com',
+  prefix: 'https://api.example.com',
   auth: { getToken: () => localStorage.getItem('token') },
   responseParser: { responseReturn: 'data' },
 })
@@ -70,8 +69,10 @@ const { data } = useQuery({
 ## 安装
 
 ```bash
-pnpm add @kkfive/request ky qs parse-sse
+pnpm add @kkfive/request
 ```
+
+> ky / qs / parse-sse 已作为直接依赖随包安装，无需手动安装。
 
 ## 快速开始
 
@@ -79,7 +80,7 @@ pnpm add @kkfive/request ky qs parse-sse
 import { createClient } from '@kkfive/request'
 
 const http = createClient({
-  prefixUrl: 'https://api.example.com',
+  prefix: 'https://api.example.com',
   responseParser: {
     responseReturn: 'data',
     codeField: 'code',
@@ -103,7 +104,7 @@ const user = await http.post<User>('/users', { name: 'test' })
 
 ```typescript
 const http = createClient({
-  prefixUrl: 'https://api.example.com',
+  prefix: 'https://api.example.com',
   auth: {
     getToken: async () => localStorage.getItem('token'),
     headerName: 'token', // 默认 'Authorization'
@@ -149,19 +150,32 @@ const http = createClient({
 - ✅ 并发请求去重，多个 401 只刷新一次
 - ✅ 刷新成功后自动重试原请求
 - ✅ 支持异步回调（`onRefreshSuccess` 可以是 async 函数）
-- ✅ FormData 上传自动优化，跳过 body clone 以减少内存占用
+- ✅ POST / PUT / FormData 在 401 后同样能刷新并重试（基于 ky 原生 `ky.retry()`）
 
-### 国际化错误消息
+### 错误处理
 
-支持中英文错误消息：
+错误分两类，互不混淆：
+
+- **业务错误 `BusinessError`**：HTTP 2xx 但业务 `code` 不符，携带 `code` / `raw` / `response`
+- **传输层错误**：ky 原生的 `HTTPError` / `NetworkError` / `TimeoutError` / `ForceRetryError`，均从本包重新导出
 
 ```typescript
-const http = createClient({
-  locale: 'en', // 'zh' | 'en'，默认 'zh'
-  responseParser: {
-    responseReturn: 'data',
-  },
-})
+import { BusinessError, isHTTPError, isTimeoutError } from '@kkfive/request'
+
+try {
+  const users = await http.get<User[]>('/users')
+}
+catch (error) {
+  if (error instanceof BusinessError) {
+    console.log(error.code, error.raw) // 业务错误码与原始响应体
+  }
+  else if (isHTTPError(error)) {
+    console.log(error.response.status, error.data) // HTTP 错误
+  }
+  else if (isTimeoutError(error)) {
+    // 超时
+  }
+}
 ```
 
 ### 响应解析
@@ -250,7 +264,7 @@ const text = await http.raw.get('/markdown').text()
 import { createClient, createSSEStream } from '@kkfive/request'
 
 const client = createClient({
-  prefixUrl: 'https://api.openai.com/v1',
+  prefix: 'https://api.openai.com/v1',
   auth: { getToken: () => 'sk-xxx' },
 })
 
@@ -329,16 +343,15 @@ for await (const event of stream) {
 
 | 选项 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `prefixUrl` | `string` | - | 请求 URL 前缀 |
+| `prefix` | `string` | - | 请求 URL 前缀（ky 2.0，取代旧的 `prefixUrl`） |
 | `timeout` | `number` | `10000` | 超时时间（毫秒） |
 | `headers` | `Record<string, string>` | - | 请求头 |
 | `responseParser` | `ResponseParserOptions` | - | 响应解析配置 |
 | `auth` | `AuthOptions` | - | 认证配置 |
 | `getHeaders` | `() => Record<string, string>` | - | 动态获取额外 headers |
-| `locale` | `'zh' \| 'en'` | `'zh'` | 错误消息语言 |
 | `onRequest` | `(method, url) => void` | - | 请求发送前回调 |
 | `onResponse` | `(method, url, status) => void` | - | 响应返回后回调 |
-| `onError` | `(error, response?) => void` | - | 错误发生时回调 |
+| `onError` | `(error: Error, response?) => void` | - | 错误发生时回调（业务错误为 BusinessError，传输错误为 ky 原生类型） |
 | `onUnauthorized` | `() => void` | - | 401 未授权时回调 |
 
 #### AuthOptions

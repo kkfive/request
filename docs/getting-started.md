@@ -5,8 +5,10 @@
 ## 安装
 
 ```bash
-pnpm add @kkfive/request ky qs
+pnpm add @kkfive/request
 ```
+
+> ky / qs / parse-sse 已作为直接依赖随包安装，无需手动安装。
 
 ## 基础使用
 
@@ -16,7 +18,7 @@ pnpm add @kkfive/request ky qs
 import { createClient } from '@kkfive/request'
 
 const http = createClient({
-  prefixUrl: 'https://api.example.com',
+  prefix: 'https://api.example.com',
 })
 
 // GET 请求
@@ -30,7 +32,7 @@ const user = await http.post<User>('/users', { name: 'test' })
 
 ```typescript
 const http = createClient({
-  prefixUrl: 'https://api.example.com',
+  prefix: 'https://api.example.com',
   responseParser: {
     responseReturn: 'data',  // 只返回 data 字段
     codeField: 'code',       // 业务状态码字段
@@ -47,7 +49,7 @@ const users = await http.get<User[]>('/users')
 
 ```typescript
 const http = createClient({
-  prefixUrl: 'https://api.example.com',
+  prefix: 'https://api.example.com',
   auth: {
     getToken: () => localStorage.getItem('access_token'),
     headerName: 'Authorization',  // 默认值
@@ -63,7 +65,7 @@ const users = await http.get<User[]>('/users')
 
 ```typescript
 const http = createClient({
-  prefixUrl: 'https://api.example.com',
+  prefix: 'https://api.example.com',
   auth: {
     getToken: () => localStorage.getItem('access_token'),
     refreshToken: {
@@ -100,7 +102,7 @@ import { useQuery } from '@tanstack/react-query'
 
 // 创建 HTTP 客户端
 const http = createClient({
-  prefixUrl: 'https://api.example.com',
+  prefix: 'https://api.example.com',
   responseParser: { responseReturn: 'data' },
 })
 
@@ -165,7 +167,7 @@ function CreateUser() {
 
 ```typescript
 const http = createClient({
-  prefixUrl: 'https://api.example.com',
+  prefix: 'https://api.example.com',
   onRequest: (method, url) => {
     console.log(`[Request] ${method} ${url}`)
   },
@@ -185,7 +187,7 @@ const http = createClient({
 
 ```typescript
 const http = createClient({
-  prefixUrl: 'https://api.example.com',
+  prefix: 'https://api.example.com',
   headers: {
     'X-App-Version': '1.0.0',
   },
@@ -199,7 +201,7 @@ const http = createClient({
 
 ```typescript
 const http = createClient({
-  prefixUrl: 'https://api.example.com',
+  prefix: 'https://api.example.com',
   timeout: 10000, // 10 秒
 })
 
@@ -211,7 +213,7 @@ await http.get('/users', { timeout: 5000 })
 
 ```typescript
 const http = createClient({
-  prefixUrl: 'https://api.example.com',
+  prefix: 'https://api.example.com',
 })
 
 // 使用 params
@@ -325,33 +327,33 @@ const response = await http.get('/users', { unwrap: false })
 
 ## 错误处理
 
-### 捕获错误
+错误分两类：**业务错误** `BusinessError`（HTTP 2xx 但业务 code 不符）与**传输层错误**（ky 原生的 `HTTPError` / `NetworkError` / `TimeoutError` 等，均从本包重新导出）。
+
+### 区分业务错误与传输错误
 
 ```typescript
+import { BusinessError, isHTTPError, isNetworkError, isTimeoutError } from '@kkfive/request'
+
 try {
   const users = await http.get<User[]>('/users')
-} catch (error) {
-  if (error instanceof RequestError) {
-    console.log(error.code)           // 错误代码
-    console.log(error.message)        // 错误消息
-    console.log(error.response)       // HTTP 响应对象
-    console.log(error.isBusinessError) // 是否为业务错误
-  }
 }
-```
-
-### 区分网络错误和业务错误
-
-```typescript
-try {
-  const users = await http.get<User[]>('/users')
-} catch (error) {
-  if (error.isBusinessError) {
-    // 业务错误（如：code !== 0）
-    toast.error(error.message)
-  } else {
-    // 网络错误（如：404、500）
-    toast.error('网络错误，请稍后重试')
+catch (error) {
+  if (error instanceof BusinessError) {
+    // 业务错误：HTTP 2xx 但 code !== successCode
+    console.log(error.code) // 业务错误码
+    console.log(error.message) // 业务错误消息
+    console.log(error.raw) // 原始响应体
+  }
+  else if (isHTTPError(error)) {
+    // HTTP 错误（4xx / 5xx）
+    console.log(error.response.status)
+    console.log(error.data) // ky 预解析的响应体
+  }
+  else if (isTimeoutError(error)) {
+    // 请求超时
+  }
+  else if (isNetworkError(error)) {
+    // 网络错误（连接失败等）
   }
 }
 ```
@@ -359,27 +361,21 @@ try {
 ### 全局错误处理
 
 ```typescript
+import { BusinessError, isHTTPError } from '@kkfive/request'
+
 const http = createClient({
   onError: (error, response) => {
-    if (error.isBusinessError) {
+    if (error instanceof BusinessError) {
       toast.error(error.message)
-    } else {
-      toast.error('网络错误')
+    }
+    else if (isHTTPError(error)) {
+      toast.error(`请求失败（${error.response.status}）`)
+    }
+    else {
+      toast.error('网络异常，请稍后重试')
     }
   },
 })
-```
-
-## 国际化
-
-```typescript
-const http = createClient({
-  locale: 'en', // 'zh' | 'en'，默认 'zh'
-})
-
-// 错误消息会根据 locale 自动切换
-// zh: '请求参数错误'
-// en: 'Bad Request'
 ```
 
 ## 下一步
