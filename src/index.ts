@@ -13,6 +13,9 @@ export {
   paramsSerializerHook,
 } from './hooks'
 
+// SSE 流式请求
+export { createSSEStream, createSSEStreamFromResponse, sse, SSEStream } from './sse'
+
 // 类型导出
 export type {
   AuthConfig,
@@ -31,6 +34,17 @@ export type {
   ResponseParserOptions,
   ResponseParserRawConfig,
   ResponseReturnMode,
+} from './types'
+
+// SSE 类型
+export type {
+  SSECloseHandler,
+  SSEConfig,
+  SSEErrorHandler,
+  SSEEvent,
+  SSEEventHandler,
+  SSEFromResponseOptions,
+  SSEStream as SSEStreamType,
 } from './types'
 
 // 工具函数

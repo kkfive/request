@@ -11,6 +11,7 @@
 - ✅ 业务错误处理
 - ✅ 生命周期回调
 - ✅ 国际化错误消息
+- ✅ SSE 流式请求（基于 [parse-sse](https://github.com/sindresorhus/parse-sse)）
 
 **高级功能交由专业工具处理**：
 
@@ -69,7 +70,7 @@ const { data } = useQuery({
 ## 安装
 
 ```bash
-pnpm add @kkfive/request ky qs
+pnpm add @kkfive/request ky qs parse-sse
 ```
 
 ## 快速开始
@@ -178,10 +179,10 @@ const http = createClient({
   },
 })
 
-// unwrap: true (默认) - 只返回 data 字段
+// 不传 unwrap - 跟随实例 responseParser 配置（此处返回 data 字段）
 const data = await http.get('/api')
 
-// unwrap: false - 返回完整响应体 { code, data, message }
+// unwrap: false - 覆盖实例配置，返回完整响应体 { code, data, message }
 const response = await http.get('/api', { unwrap: false })
 ```
 
@@ -238,6 +239,85 @@ const blob = await http.raw.get('/download').blob()
 // 获取纯文本
 const text = await http.raw.get('/markdown').text()
 ```
+
+### SSE 流式请求
+
+基于 [parse-sse](https://github.com/sindresorhus/parse-sse) 实现 SSE 流式请求，支持 async iteration 和 emitter 两种消费模式。
+
+#### 高层 API：一步完成请求 + 消费
+
+```typescript
+import { createClient, createSSEStream } from '@kkfive/request'
+
+const client = createClient({
+  prefixUrl: 'https://api.openai.com/v1',
+  auth: { getToken: () => 'sk-xxx' },
+})
+
+// Async iteration 模式
+const stream = createSSEStream(client.raw, '/chat/completions', {
+  model: 'gpt-4',
+  messages: [{ role: 'user', content: 'Hello' }],
+  stream: true,
+})
+
+for await (const event of stream) {
+  const content = event.data?.choices?.[0]?.delta?.content
+  if (content) process.stdout.write(content)
+}
+```
+
+#### Emitter 模式：多监听器
+
+```typescript
+const stream = createSSEStream(client.raw, '/chat/completions', body)
+
+stream
+  .on('data', (event) => {
+    renderUI(event.data)
+  })
+  .on('error', (error) => {
+    reportToSentry(error)
+  })
+  .on('close', () => {
+    cleanup()
+  })
+
+await stream.done
+```
+
+#### 底层 API：接收已有 Response
+
+用于需要自定义请求参数的场景。
+
+```typescript
+import { createSSEStreamFromResponse } from '@kkfive/request'
+
+// 自定义请求参数
+const response = await client.raw('sse/chat', {
+  method: 'POST',
+  headers: { 'X-Custom': 'value' },
+  json: { messages },
+})
+
+const stream = createSSEStreamFromResponse(response)
+
+for await (const event of stream) {
+  console.log(event.data)
+}
+```
+
+#### SSE 配置
+
+| 选项 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `parser` | `'json' \| 'text'` | `'json'` | data 字段解析方式 |
+| `doneSignal` | `string \| null` | `'[DONE]'` | 流结束信号，`null` 禁用 |
+| `signal` | `AbortSignal` | - | 取消信号 |
+| `timeout` | `number` | - | 超时时间（ms） |
+| `method` | `string` | `'POST'` | HTTP 方法 |
+| `headers` | `Record<string, string>` | - | 额外 headers |
+| `body` | `unknown` | - | 请求体 |
 
 ## API 参考
 
@@ -313,6 +393,7 @@ http.delete<T>(url, config?)
 
 - [ky](https://github.com/sindresorhus/ky) - HTTP 客户端
 - [qs](https://github.com/ljharb/qs) - 查询字符串解析
+- [parse-sse](https://github.com/sindresorhus/parse-sse) - SSE 流解析
 
 ## License
 
