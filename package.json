@@ -42,7 +42,7 @@
     "prepare": "simple-git-hooks",
     "update:deps": "npx taze -r -w"
   },
-  "peerDependencies": {
+  "dependencies": {
     "ky": "catalog:",
     "parse-sse": "catalog:",
     "qs": "catalog:"
