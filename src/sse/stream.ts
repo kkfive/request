@@ -7,7 +7,7 @@ import type {
   SSEEvent,
   SSEEventHandler,
   SSEFromResponseOptions,
-} from '../types'
+} from './types'
 import { parseServerSentEvents } from 'parse-sse'
 
 interface ListenerMap<T> {
@@ -48,7 +48,7 @@ class SSEStream<T = unknown> implements ISSEStream<T> {
     this._done = new Promise<void>((resolve, reject) => {
       this._doneResolve = resolve
       this._doneReject = reject
-    }).catch(() => {}) as Promise<void>
+    }).catch(() => { }) as Promise<void>
   }
 
   get response(): Response | undefined {
@@ -114,7 +114,7 @@ class SSEStream<T = unknown> implements ISSEStream<T> {
     if (this.consuming || !this.consumeFn)
       return
     this.consuming = true
-    this.consumeFn().catch(() => {})
+    this.consumeFn().catch(() => { })
   }
 
   // --- 消费实现 ---
@@ -199,7 +199,7 @@ class SSEStream<T = unknown> implements ISSEStream<T> {
 
     // 启动消费
     this.consuming = true
-    this.consumeFn?.().catch(() => {})
+    this.consumeFn?.().catch(() => { })
 
     const eventQueue: SSEEvent<T>[] = []
     let resolveNext: (() => void) | null = null

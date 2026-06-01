@@ -2,7 +2,7 @@ import type { ApiResponse, EchoData } from './types'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 declare global {
-  // eslint-disable-next-line vars-on-top, no-var
+  // eslint-disable-next-line vars-on-top
   var __TEST_SERVER_URL__: string
 }
 

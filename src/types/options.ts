@@ -59,7 +59,7 @@ interface LifecycleCallbacks {
   /**
    * 错误发生时回调
    */
-  onError?: (error: RequestError, response?: unknown) => void
+  onError?: (error: Error, response?: Response) => void
   /**
    * 401 未授权时回调
    */
@@ -90,7 +90,7 @@ interface ExtendedOptions {
    * 对返回错误做一些副作用行为（例如客户端遇到错误自动弹出提示）
    * @deprecated 请使用 onError 回调代替
    */
-  makeErrorMessage?: (message: string, error: RequestError) => void | null
+  makeErrorMessage?: (message: string, error: Error) => void | null
   /**
    * 是否解包响应数据，只返回 data 字段
    * - true: 返回 data 字段（需要配合实例级 responseParser 使用）
@@ -114,11 +114,6 @@ interface ExtendedOptions {
    * 扩展的 hooks 配置（高级控制）
    */
   extendedHooks?: ExtendedHooks
-  /**
-   * 语言配置，用于错误消息国际化
-   * @default 'zh'
-   */
-  locale?: 'zh' | 'en'
 }
 
 /**
@@ -131,20 +126,10 @@ interface CustomOptions {}
  */
 type RequestConfig = Options & ExtendedOptions & LifecycleCallbacks & CustomOptions
 
-// 前向声明 RequestError 类型（避免循环依赖）
-interface RequestError<T = unknown> extends Error {
-  code?: string | number
-  raw?: T
-  response?: Response
-  isBusinessError: boolean
-  options?: RequestConfig
-}
-
 export type {
   AuthConfig,
   CustomOptions,
   ExtendedOptions,
   LifecycleCallbacks,
   RequestConfig,
-  RequestError,
 }

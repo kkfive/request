@@ -1,7 +1,7 @@
 import type { KyInstance } from 'ky'
 import type { RequestConfig } from '../types'
-import ky, { HTTPError } from 'ky'
-import { RequestError } from '../errors/request-error'
+import ky, { isHTTPError } from 'ky'
+import { BusinessError } from '../errors'
 import { resolveHooks } from '../hooks'
 import { merge } from '../utils'
 
@@ -29,18 +29,9 @@ class Request {
     }
     const mergedConfig = merge(defaultConfig, requestConfig || {})
 
-    // 声明最终实例变量
-    let finalInstance: KyInstance
-
-    // 创建 getter 函数，用于延迟绑定，确保 hooks 中使用的是包含完整 hooks 链的实例
-    const getKyInstance = (): KyInstance => finalInstance
-
-    // 使用 resolveHooks 构建 hooks，传递 getter 函数
-    const hooks = resolveHooks(mergedConfig, getKyInstance)
-
-    // 创建最终实例，包含完整的 hooks 配置
-    finalInstance = ky.create({ ...mergedConfig, hooks })
-    this.instance = finalInstance
+    // 401 重试改用 ky 原生 ky.retry()，hooks 无需回引实例，直接创建即可
+    const hooks = resolveHooks(mergedConfig)
+    this.instance = ky.create({ ...mergedConfig, hooks })
     this.requestConfig = mergedConfig
   }
 
@@ -122,14 +113,13 @@ class Request {
 
     const responseReturn = this.requestConfig?.responseParser?.responseReturn === 'raw'
       || finalConfig.responseParser?.responseReturn === 'raw'
-    const prefixUrl = finalConfig.prefixUrl || this.requestConfig.prefixUrl
-
-    if (prefixUrl) {
-      url = url.startsWith('/') ? url.slice(1) : url
-    }
+    // ky 2.0：prefixUrl 已更名为 prefix，且原生支持 input 带前导斜杠，无需再手动去斜杠
+    const prefix = finalConfig.prefix || this.requestConfig.prefix
 
     const method = finalConfig.method || 'GET'
-    const fullUrl = prefixUrl ? `${prefixUrl}${url}` : url
+    const fullUrl = prefix
+      ? `${String(prefix).replace(/\/+$/, '')}/${url.replace(/^\/+/, '')}`
+      : url
     onRequest?.(method, fullUrl)
 
     try {
@@ -144,25 +134,22 @@ class Request {
     catch (error: unknown) {
       const makeErrorMessage = finalConfig.makeErrorMessage || this.requestConfig.makeErrorMessage
 
-      if (error instanceof HTTPError) {
-        const _error = error as HTTPError
-        Object.defineProperty(_error, 'isBusinessError', { value: false, writable: false, configurable: false })
-        onResponse?.(method, fullUrl, _error.response.status)
-        onError?.(_error as unknown as RequestError, _error.response)
-        makeErrorMessage?.(_error.message, _error as unknown as RequestError)
+      // 原样抛出：业务错误为 BusinessError，传输层错误为 ky 的 HTTPError/NetworkError/TimeoutError 等。
+      // 保留完整错误信息，交给上层用 instanceof BusinessError / ky 类型守卫(isHTTPError 等)区分处理。
+      const errResponse = isHTTPError(error)
+        ? error.response
+        : error instanceof BusinessError
+          ? error.response
+          : undefined
+
+      if (errResponse) {
+        onResponse?.(method, fullUrl, errResponse.status)
       }
-      else if (error instanceof RequestError) {
-        const _error = error as RequestError
-        if (_error.response) {
-          onResponse?.(method, fullUrl, _error.response.status)
-        }
-        onError?.(_error, _error.response)
-        makeErrorMessage?.(_error.message, _error)
+      if (error instanceof Error) {
+        onError?.(error, errResponse)
+        makeErrorMessage?.(error.message, error)
       }
-      else if (error instanceof Error) {
-        onError?.(error as RequestError, undefined)
-        makeErrorMessage?.(error.message, error as RequestError)
-      }
+
       throw error
     }
   }
@@ -173,7 +160,7 @@ class Request {
  * @example
  * ```typescript
  * const client = createClient({
- *   prefixUrl: 'https://api.example.com',
+ *   prefix: 'https://api.example.com',
  *   auth: { getToken: () => localStorage.getItem('token') },
  *   onUnauthorized: () => redirectToLogin(),
  * })

@@ -78,10 +78,10 @@ interface ResponseParserRawConfig extends BaseParserOptions {
 /**
  * 响应解析配置联合类型
  */
-type ResponseParserConfig =
-  | ResponseParserDataConfig
-  | ResponseParserBodyConfig
-  | ResponseParserRawConfig
+type ResponseParserConfig
+  = | ResponseParserDataConfig
+    | ResponseParserBodyConfig
+    | ResponseParserRawConfig
 
 export type {
   BaseParserOptions,

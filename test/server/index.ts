@@ -168,16 +168,24 @@ export function startServer(): Promise<string> {
         res.end(JSON.stringify({ message: '未授权或登录已过期' }))
       }
       else if (url.pathname === '/auth/protected') {
-        // 模拟需要 token 的受保护端点
+        // 模拟需要 token 的受保护端点（回显 body 以便验证重试时 body 是否保留）
         const authorization = req.headers.authorization || ''
+        const rawBody = await parseBody(req)
+        let received: unknown = null
+        try {
+          received = rawBody ? JSON.parse(rawBody) : null
+        }
+        catch {
+          received = rawBody || null
+        }
         if (authorization.includes('new-token')) {
-          // 刷新后的新 token，返回成功
+          // 刷新后的新 token，返回成功（仅在有 body 时回显 received，避免影响无 body 的断言）
           res.statusCode = 200
-          res.end(JSON.stringify({
-            code: 0,
-            success: true,
-            data: { id: 1, name: 'user' },
-          }))
+          const data: Record<string, unknown> = { id: 1, name: 'user' }
+          if (received != null) {
+            data.received = received
+          }
+          res.end(JSON.stringify({ code: 0, success: true, data }))
         }
         else {
           // 旧 token 或无 token，返回 401

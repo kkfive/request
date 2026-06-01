@@ -1,9 +1,10 @@
+import type { HTTPError } from '../src'
 import type { EchoData, FormDataResponse } from './types'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import { Request, RequestError, to } from '../src'
+import { BusinessError, isHTTPError, Request, to } from '../src'
 
 declare global {
-  // eslint-disable-next-line vars-on-top, no-var
+  // eslint-disable-next-line vars-on-top
   var __TEST_SERVER_URL__: string
 }
 
@@ -23,7 +24,7 @@ describe('request 核心功能测试', () => {
     })
 
     it('raw getter 应返回 ky 实例', () => {
-      const request = new Request({ prefixUrl: baseUrl })
+      const request = new Request({ prefix: baseUrl })
       expect(request.raw).toBeDefined()
       expect(typeof request.raw).toBe('function')
     })
@@ -34,7 +35,7 @@ describe('request 核心功能测试', () => {
 
     beforeAll(() => {
       request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: {
           responseReturn: 'data',
           codeField: 'success',
@@ -60,7 +61,7 @@ describe('request 核心功能测试', () => {
     it('pOST 请求应正确处理 FormData', async () => {
       // 使用 Request 类的 post 方法测试 FormData
       const requestNoParser = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
       })
 
       const formData = new FormData()
@@ -79,7 +80,7 @@ describe('request 核心功能测试', () => {
     it('pOST 请求应正确处理空 FormData', async () => {
       // 使用 Request 类的 post 方法测试空 FormData
       const requestNoParser = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
       })
 
       const formData = new FormData()
@@ -94,7 +95,7 @@ describe('request 核心功能测试', () => {
       // 这个测试覆盖 request.ts line 188: finalConfig.hooks?.beforeRequest ?? []
       // 当 FormData 请求时 config 没有 hooks 配置
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         // 不使用 responseParser，避免 unwrap 逻辑修改 finalConfig
       })
 
@@ -118,7 +119,7 @@ describe('request 核心功能测试', () => {
       // 这个测试覆盖 request.ts line 188 的另一个分支
       // 当 FormData 请求时 config.hooks 存在但 beforeRequest 为 undefined
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
       })
 
       const formData = new FormData()
@@ -147,7 +148,7 @@ describe('request 核心功能测试', () => {
     it('pUT 请求应正确处理 FormData', async () => {
       // 使用 Request 类的 put 方法测试 FormData
       const requestNoParser = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
       })
 
       const formData = new FormData()
@@ -169,7 +170,7 @@ describe('request 核心功能测试', () => {
     it('pATCH 请求应正确处理 FormData', async () => {
       // 使用 Request 类的 patch 方法测试 FormData
       const requestNoParser = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
       })
 
       const formData = new FormData()
@@ -197,7 +198,7 @@ describe('request 核心功能测试', () => {
   describe('auth 配置', () => {
     it('getToken 同步返回 token 时应注入 Bearer token', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: { getToken: () => 'sync-token' },
         responseParser: {
           responseReturn: 'data',
@@ -215,7 +216,7 @@ describe('request 核心功能测试', () => {
 
     it('getToken 异步返回 token 时应注入 Bearer token', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: { getToken: async () => 'async-token' },
         responseParser: {
           responseReturn: 'data',
@@ -233,7 +234,7 @@ describe('request 核心功能测试', () => {
 
     it('getToken 返回 null 时不应添加 Authorization header', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: { getToken: () => null },
         responseParser: {
           responseReturn: 'data',
@@ -251,7 +252,7 @@ describe('request 核心功能测试', () => {
 
     it('getToken 返回 Promise<null> 时不应添加 Authorization header', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: { getToken: async () => null },
         responseParser: {
           responseReturn: 'data',
@@ -269,7 +270,7 @@ describe('request 核心功能测试', () => {
 
     it('自定义 headerName 应使用指定的 header 名', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: {
           getToken: () => 'custom-token',
           headerName: 'X-Auth-Token',
@@ -290,7 +291,7 @@ describe('request 核心功能测试', () => {
 
     it('scheme=Basic 应使用 Basic 前缀', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: {
           getToken: () => 'basic-token',
           scheme: 'Basic',
@@ -311,7 +312,7 @@ describe('request 核心功能测试', () => {
 
     it('scheme=null 应不添加前缀', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: {
           getToken: () => 'raw-token',
           scheme: null,
@@ -332,7 +333,7 @@ describe('request 核心功能测试', () => {
 
     it('scheme 为空字符串应不添加前缀', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: {
           getToken: () => 'no-scheme-token',
           scheme: '',
@@ -355,7 +356,7 @@ describe('request 核心功能测试', () => {
   describe('getHeaders 配置', () => {
     it('同步返回 headers 时应注入', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         getHeaders: () => ({ 'X-Custom': 'sync-value' }),
         responseParser: {
           responseReturn: 'data',
@@ -373,7 +374,7 @@ describe('request 核心功能测试', () => {
 
     it('异步返回 headers 时应注入', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         getHeaders: async () => ({ 'X-Async': 'async-value' }),
         responseParser: {
           responseReturn: 'data',
@@ -391,7 +392,7 @@ describe('request 核心功能测试', () => {
 
     it('返回空值 header 时应被忽略', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         getHeaders: () => ({ 'X-Empty': '', 'X-Valid': 'value' }),
         responseParser: {
           responseReturn: 'data',
@@ -410,7 +411,7 @@ describe('request 核心功能测试', () => {
 
     it('返回空对象时应正常工作', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         getHeaders: () => ({}),
         responseParser: {
           responseReturn: 'data',
@@ -432,7 +433,7 @@ describe('request 核心功能测试', () => {
   describe('unwrap 参数', () => {
     it('unwrap=true 且有实例 responseParser 时应返回 data 字段', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: {
           responseReturn: 'data',
           codeField: 'success',
@@ -451,7 +452,7 @@ describe('request 核心功能测试', () => {
 
     it('unwrap=false 且有实例 responseParser 时应返回完整响应体', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: {
           responseReturn: 'data',
           codeField: 'success',
@@ -470,7 +471,7 @@ describe('request 核心功能测试', () => {
     })
 
     it('unwrap=true 但无实例 responseParser 时应被忽略', async () => {
-      const request = new Request({ prefixUrl: baseUrl })
+      const request = new Request({ prefix: baseUrl })
 
       const result = await request.get('/success', { unwrap: true })
       expect(typeof result).toBe('object')
@@ -483,7 +484,7 @@ describe('request 核心功能测试', () => {
 
     beforeAll(() => {
       request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: {
           responseReturn: 'data',
           codeField: 'success',
@@ -543,7 +544,7 @@ describe('request 核心功能测试', () => {
     it('onRequest 实例级应被调用', async () => {
       const onRequestFn = vi.fn()
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         onRequest: onRequestFn,
         responseParser: {
           responseReturn: 'data',
@@ -563,7 +564,7 @@ describe('request 核心功能测试', () => {
       const instanceFn = vi.fn()
       const requestFn = vi.fn()
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         onRequest: instanceFn,
         responseParser: {
           responseReturn: 'data',
@@ -583,7 +584,7 @@ describe('request 核心功能测试', () => {
     it('onResponse 成功响应时应被调用', async () => {
       const onResponseFn = vi.fn()
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         onResponse: onResponseFn,
         responseParser: {
           responseReturn: 'data',
@@ -602,7 +603,7 @@ describe('request 核心功能测试', () => {
     it('onResponse HTTP 错误时应被调用', async () => {
       const onResponseFn = vi.fn()
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         onResponse: onResponseFn,
         responseParser: {
           responseReturn: 'data',
@@ -621,7 +622,7 @@ describe('request 核心功能测试', () => {
     it('onError HTTP 错误时应被调用', async () => {
       const onErrorFn = vi.fn()
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         onError: onErrorFn,
         responseParser: {
           responseReturn: 'data',
@@ -645,7 +646,7 @@ describe('request 核心功能测试', () => {
       const instanceFn = vi.fn()
       const requestFn = vi.fn()
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         onError: instanceFn,
         responseParser: {
           responseReturn: 'data',
@@ -665,7 +666,7 @@ describe('request 核心功能测试', () => {
     it('onUnauthorized 401 响应时应被调用', async () => {
       const onUnauthorizedFn = vi.fn()
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         onUnauthorized: onUnauthorizedFn,
         responseParser: {
           responseReturn: 'data',
@@ -684,7 +685,7 @@ describe('request 核心功能测试', () => {
     it('onUnauthorized 非 401 响应时不应被调用', async () => {
       const onUnauthorizedFn = vi.fn()
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         onUnauthorized: onUnauthorizedFn,
         responseParser: {
           responseReturn: 'data',
@@ -703,7 +704,7 @@ describe('request 核心功能测试', () => {
     it('onUnauthorized 无 responseParser 时仍应被调用', async () => {
       const onUnauthorizedFn = vi.fn()
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         onUnauthorized: onUnauthorizedFn,
       })
 
@@ -714,7 +715,7 @@ describe('request 核心功能测试', () => {
 
   describe('请求取消', () => {
     it('abortController.abort() 应取消请求', async () => {
-      const request = new Request({ prefixUrl: baseUrl })
+      const request = new Request({ prefix: baseUrl })
       const controller = Request.createAbortController()
 
       setTimeout(() => controller.abort(), 10)
@@ -728,7 +729,7 @@ describe('request 核心功能测试', () => {
   describe('responseParser 详细测试', () => {
     it('responseReturn=raw 应返回 Response 实例', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: { responseReturn: 'raw' },
       })
 
@@ -738,7 +739,7 @@ describe('request 核心功能测试', () => {
 
     it('responseReturn=body 成功响应应返回完整 JSON', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: { responseReturn: 'body' },
       })
 
@@ -747,19 +748,20 @@ describe('request 核心功能测试', () => {
       expect(result).toHaveProperty('data')
     })
 
-    it('responseReturn=body HTTP 错误应抛出 RequestError', async () => {
+    it('responseReturn=body HTTP 错误应抛出 ky HTTPError', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: { responseReturn: 'body' },
       })
 
       const [error] = await to(request.get('/error/http/500'))
-      expect(error).toBeInstanceOf(RequestError)
+      expect(isHTTPError(error)).toBe(true)
+      expect((error as HTTPError).response.status).toBe(500)
     })
 
     it('dataField 为函数时应返回函数处理结果', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: {
           responseReturn: 'data',
           codeField: 'success',
@@ -776,7 +778,7 @@ describe('request 核心功能测试', () => {
 
     it('successCode 为数值时应正确判断', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: {
           responseReturn: 'data',
           codeField: 'code',
@@ -793,7 +795,7 @@ describe('request 核心功能测试', () => {
 
     it('successCode 为函数返回 false 时应抛出业务错误', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: {
           responseReturn: 'data',
           codeField: 'success',
@@ -805,12 +807,12 @@ describe('request 核心功能测试', () => {
       })
 
       const [error] = await to(request.get('/success'))
-      expect(error).toBeInstanceOf(RequestError)
+      expect(error).toBeInstanceOf(BusinessError)
     })
 
     it('errorMessageField 为函数时应使用函数返回的消息', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: {
           responseReturn: 'data',
           codeField: 'success',
@@ -827,7 +829,7 @@ describe('request 核心功能测试', () => {
 
     it('无 errorMessageField 时应使用 msg 字段', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: {
           responseReturn: 'data',
           codeField: 'success',
@@ -848,7 +850,7 @@ describe('request 核心功能测试', () => {
 
     beforeAll(() => {
       request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: {
           responseReturn: 'data',
           codeField: 'success',
@@ -860,47 +862,47 @@ describe('request 核心功能测试', () => {
       })
     })
 
-    it('400 应返回请求参数错误', async () => {
+    it('400 应以 ky HTTPError 抛出', async () => {
       const [error] = await to(request.get('/error/http/400'))
-      expect(error).toBeInstanceOf(RequestError)
-      expect(error?.message).toBe('请求参数错误')
+      expect(isHTTPError(error)).toBe(true)
+      expect((error as HTTPError).response.status).toBe(400)
     })
 
-    it('401 应返回未授权或登录已过期', async () => {
+    it('401 应以 ky HTTPError 抛出', async () => {
       const [error] = await to(request.get('/error/http/401'))
-      expect(error).toBeInstanceOf(RequestError)
-      expect(error?.message).toBe('未授权或登录已过期')
+      expect(isHTTPError(error)).toBe(true)
+      expect((error as HTTPError).response.status).toBe(401)
     })
 
-    it('403 应返回没有权限访问该资源', async () => {
+    it('403 应以 ky HTTPError 抛出', async () => {
       const [error] = await to(request.get('/error/http/403'))
-      expect(error).toBeInstanceOf(RequestError)
-      expect(error?.message).toBe('没有权限访问该资源')
+      expect(isHTTPError(error)).toBe(true)
+      expect((error as HTTPError).response.status).toBe(403)
     })
 
-    it('404 应返回请求的资源不存在', async () => {
+    it('404 应以 ky HTTPError 抛出', async () => {
       const [error] = await to(request.get('/error/http/404'))
-      expect(error).toBeInstanceOf(RequestError)
-      expect(error?.message).toBe('请求的资源不存在')
+      expect(isHTTPError(error)).toBe(true)
+      expect((error as HTTPError).response.status).toBe(404)
     })
 
-    it('500 应返回服务器内部错误', async () => {
+    it('500 应以 ky HTTPError 抛出', async () => {
       const [error] = await to(request.get('/error/http/500'))
-      expect(error).toBeInstanceOf(RequestError)
-      expect(error?.message).toBe('服务器内部错误')
+      expect(isHTTPError(error)).toBe(true)
+      expect((error as HTTPError).response.status).toBe(500)
     })
 
-    it('418 应返回网络错误状态码', async () => {
+    it('418 应以 ky HTTPError 抛出', async () => {
       const [error] = await to(request.get('/error/http/418'))
-      expect(error).toBeInstanceOf(RequestError)
-      expect(error?.message).toBe('网络错误: 418')
+      expect(isHTTPError(error)).toBe(true)
+      expect((error as HTTPError).response.status).toBe(418)
     })
   })
 
   describe('uRL 处理', () => {
-    it('prefixUrl + /开头 URL 应去除开头斜杠', async () => {
+    it('prefix + /开头 URL 应去除开头斜杠', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: {
           responseReturn: 'data',
           codeField: 'success',
@@ -915,9 +917,9 @@ describe('request 核心功能测试', () => {
       expect(typeof result).toBe('string')
     })
 
-    it('prefixUrl + 无斜杠 URL 应正常拼接', async () => {
+    it('prefix + 无斜杠 URL 应正常拼接', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: {
           responseReturn: 'data',
           codeField: 'success',
@@ -932,9 +934,9 @@ describe('request 核心功能测试', () => {
       expect(typeof result).toBe('string')
     })
 
-    it('请求级 prefixUrl 应覆盖实例级', async () => {
+    it('请求级 prefix 应覆盖实例级', async () => {
       const request = new Request({
-        prefixUrl: 'http://invalid-url',
+        prefix: 'http://invalid-url',
         responseParser: {
           responseReturn: 'data',
           codeField: 'success',
@@ -945,15 +947,15 @@ describe('request 核心功能测试', () => {
         },
       })
 
-      const result = await request.get<string>('/success', { prefixUrl: baseUrl })
+      const result = await request.get<string>('/success', { prefix: baseUrl })
       expect(typeof result).toBe('string')
     })
   })
 
   describe('错误处理', () => {
-    it('业务错误应包含 isBusinessError=true', async () => {
+    it('业务错误应抛出 BusinessError 并携带业务 code', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: {
           responseReturn: 'data',
           codeField: 'success',
@@ -965,14 +967,14 @@ describe('request 核心功能测试', () => {
       })
 
       const [error] = await to(request.get('/error/business/500'))
-      expect(error).toBeInstanceOf(RequestError)
-      expect((error as RequestError).isBusinessError).toBe(true)
+      expect(error).toBeInstanceOf(BusinessError)
+      expect((error as BusinessError).code).toBe(500)
     })
 
     it('makeErrorMessage 实例级应被调用', async () => {
       const makeErrorMessageFn = vi.fn()
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         makeErrorMessage: makeErrorMessageFn,
         responseParser: {
           responseReturn: 'data',
@@ -992,7 +994,7 @@ describe('request 核心功能测试', () => {
       const instanceFn = vi.fn()
       const requestFn = vi.fn()
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         makeErrorMessage: instanceFn,
         responseParser: {
           responseReturn: 'data',
@@ -1012,11 +1014,11 @@ describe('request 核心功能测试', () => {
 
   describe('hooks 合并', () => {
     it('afterResponse hook 应合并执行', async () => {
-      const instanceHook = vi.fn((_req: any, _opt: any, res: Response) => res)
-      const requestHook = vi.fn((_req: any, _opt: any, res: Response) => res)
+      const instanceHook = vi.fn(({ response }: any) => response)
+      const requestHook = vi.fn(({ response }: any) => response)
 
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: {
           responseReturn: 'data',
           codeField: 'success',
@@ -1043,7 +1045,7 @@ describe('request 核心功能测试', () => {
       const beforeHook2 = vi.fn()
 
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         extendedHooks: {
           beforeRequest: [beforeHook1, beforeHook2],
         },
@@ -1064,7 +1066,7 @@ describe('request 核心功能测试', () => {
 
     it('control.disable 应禁用指定 hook', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: { getToken: () => 'token' },
         extendedHooks: {
           control: {
@@ -1086,7 +1088,7 @@ describe('request 核心功能测试', () => {
 
     it('features.enableAuth=false 应禁用 auth hook', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         features: { enableAuth: false },
         auth: { getToken: () => 'token' },
         responseParser: {
@@ -1104,7 +1106,7 @@ describe('request 核心功能测试', () => {
 
     it('features.enableResponseParser=false 应禁用响应解析', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: {
           responseReturn: 'data',
           codeField: 'code',
@@ -1124,7 +1126,7 @@ describe('request 核心功能测试', () => {
 
     it('features.enableParamsSerializer=false 应禁用参数序列化', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         features: { enableParamsSerializer: false },
         responseParser: {
           responseReturn: 'data',
@@ -1146,7 +1148,7 @@ describe('request 核心功能测试', () => {
 
     it('features.enableContentType=false 应禁用 contentType hook', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         features: { enableContentType: false },
         responseParser: {
           responseReturn: 'data',
@@ -1164,7 +1166,7 @@ describe('request 核心功能测试', () => {
     it('features.enableUnauthorizedHandler=false 应禁用 unauthorized hook', async () => {
       const onUnauthorized = vi.fn()
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         features: { enableUnauthorizedHandler: false },
         onUnauthorized,
       })
@@ -1179,7 +1181,7 @@ describe('request 核心功能测试', () => {
       const appendHook = vi.fn()
 
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         extendedHooks: {
           beforeRequest: {
             prepend: [prependHook],
@@ -1205,7 +1207,7 @@ describe('request 核心功能测试', () => {
       const prependHook = vi.fn()
 
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         extendedHooks: {
           beforeRequest: {
             prepend: [prependHook],
@@ -1230,7 +1232,7 @@ describe('request 核心功能测试', () => {
       const customAuthHook = vi.fn()
 
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: { getToken: () => 'token' },
         extendedHooks: {
           control: {
@@ -1261,7 +1263,7 @@ describe('request 核心功能测试', () => {
       const makeErrorMessageFn = vi.fn()
 
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         onResponse: onResponseFn,
         onError: onErrorFn,
         makeErrorMessage: makeErrorMessageFn,
@@ -1280,7 +1282,7 @@ describe('request 核心功能测试', () => {
       const makeErrorMessageFn = vi.fn()
 
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         onError: onErrorFn,
         makeErrorMessage: makeErrorMessageFn,
         timeout: 100, // 设置很短的超时
@@ -1298,7 +1300,7 @@ describe('request 核心功能测试', () => {
   describe('responseParser 边界条件', () => {
     it('默认 errorMessageField 应使用 message 字段', async () => {
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: {
           responseReturn: 'data',
           codeField: 'success',
@@ -1310,17 +1312,17 @@ describe('request 核心功能测试', () => {
       })
 
       const [error] = await to(request.get('/error/business/500'))
-      expect(error).toBeInstanceOf(RequestError)
-      // 由于 /error/business/500 返回的是 errorMessage 字段，而默认是 message
-      // 所以会回退到 msg 字段或默认消息 '接口响应失败'
-      expect(error?.message).toBe('接口响应失败')
+      expect(error).toBeInstanceOf(BusinessError)
+      // /error/business/500 返回 errorMessage 字段，而默认取 message；message/msg 均不存在，
+      // 因此回退到英文默认文案 'API Response Failed'
+      expect(error?.message).toBe('API Response Failed')
     })
 
     it('responseParser 未定义时 hook 应使用默认值', async () => {
       // 这个测试覆盖 response.ts line 137: responseReturnConfig ?? {}
       // 当 responseParser 被设置但 responseReturnConfig 为 undefined 时
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: {
           responseReturn: 'raw',
         },
@@ -1331,9 +1333,9 @@ describe('request 核心功能测试', () => {
       expect(result).toBeInstanceOf(Response)
     })
 
-    it('无 prefixUrl 时应直接使用 url', async () => {
+    it('无 prefix 时应直接使用 url', async () => {
       const request = new Request({
-        // 不设置 prefixUrl
+        // 不设置 prefix
         responseParser: {
           responseReturn: 'body',
         },
@@ -1347,7 +1349,7 @@ describe('request 核心功能测试', () => {
     it('method 未指定时应默认为 GET', async () => {
       const onRequestFn = vi.fn()
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         onRequest: onRequestFn,
       })
 
@@ -1356,85 +1358,11 @@ describe('request 核心功能测试', () => {
     })
   })
 
-  describe('国际化错误消息', () => {
-    it('locale=zh 应返回中文错误消息', async () => {
-      const request = new Request({
-        prefixUrl: baseUrl,
-        locale: 'zh',
-        responseParser: {
-          responseReturn: 'data',
-        },
-      })
-
-      const [error] = await to(request.get('/error/http/404'))
-      expect(error).toBeInstanceOf(RequestError)
-      expect(error?.message).toBe('请求的资源不存在')
-    })
-
-    it('locale=en 应返回英文错误消息', async () => {
-      const request = new Request({
-        prefixUrl: baseUrl,
-        locale: 'en',
-        responseParser: {
-          responseReturn: 'data',
-        },
-      })
-
-      const [error] = await to(request.get('/error/http/404'))
-      expect(error).toBeInstanceOf(RequestError)
-      expect(error?.message).toBe('Not Found')
-    })
-
-    it('locale=en 未知状态码应返回英文默认消息', async () => {
-      const request = new Request({
-        prefixUrl: baseUrl,
-        locale: 'en',
-        responseParser: {
-          responseReturn: 'data',
-        },
-      })
-
-      const [error] = await to(request.get('/error/http/418'))
-      expect(error).toBeInstanceOf(RequestError)
-      expect(error?.message).toBe('Network Error: 418')
-    })
-
-    it('locale=en 业务错误应返回英文默认消息', async () => {
-      const request = new Request({
-        prefixUrl: baseUrl,
-        locale: 'en',
-        responseParser: {
-          responseReturn: 'data',
-          codeField: 'success',
-          dataField: 'data',
-          successCode: true,
-        },
-      })
-
-      const [error] = await to(request.get('/error/business/500'))
-      expect(error).toBeInstanceOf(RequestError)
-      expect(error?.message).toBe('API Response Failed')
-    })
-
-    it('默认应使用中文错误消息', async () => {
-      const request = new Request({
-        prefixUrl: baseUrl,
-        responseParser: {
-          responseReturn: 'data',
-        },
-      })
-
-      const [error] = await to(request.get('/error/http/500'))
-      expect(error).toBeInstanceOf(RequestError)
-      expect(error?.message).toBe('服务器内部错误')
-    })
-  })
-
   describe('refresh token 功能', () => {
     it('401 错误应触发 token 刷新并重试请求', async () => {
       let tokenRefreshed = false
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: {
           getToken: () => tokenRefreshed ? 'new-token' : 'expired-token',
           refreshToken: {
@@ -1461,7 +1389,7 @@ describe('request 核心功能测试', () => {
       const onRefreshSuccess = vi.fn()
       let tokenRefreshed = false
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: {
           getToken: () => tokenRefreshed ? 'new-token' : 'expired-token',
           refreshToken: {
@@ -1485,7 +1413,7 @@ describe('request 核心功能测试', () => {
     it('token 刷新失败应调用 onRefreshFail', async () => {
       const onRefreshFail = vi.fn()
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: {
           getToken: () => 'expired-token',
           refreshToken: {
@@ -1508,7 +1436,7 @@ describe('request 核心功能测试', () => {
     it('token 刷新失败后应调用 onUnauthorized', async () => {
       const onUnauthorized = vi.fn()
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: {
           getToken: () => 'expired-token',
           refreshToken: {
@@ -1531,7 +1459,7 @@ describe('request 核心功能测试', () => {
     it('无 refreshToken 配置时 401 应直接调用 onUnauthorized', async () => {
       const onUnauthorized = vi.fn()
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: {
           getToken: () => 'token',
         },
@@ -1551,7 +1479,7 @@ describe('request 核心功能测试', () => {
       let tokenRefreshed = false
 
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: {
           getToken: () => tokenRefreshed ? 'new-token' : 'old-token',
           refreshToken: {
@@ -1596,7 +1524,7 @@ describe('request 核心功能测试', () => {
       let adminTokenRefreshed = false
 
       const apiClient = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: {
           getToken: () => apiTokenRefreshed ? 'new-token' : 'api-token',
           refreshToken: {
@@ -1610,7 +1538,7 @@ describe('request 核心功能测试', () => {
       })
 
       const adminClient = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: {
           getToken: () => adminTokenRefreshed ? 'new-token' : 'admin-token',
           refreshToken: {
@@ -1632,12 +1560,13 @@ describe('request 核心功能测试', () => {
       expect(adminTokenRefreshed).toBe(true)
     })
 
-    it('auth hook 不应该覆盖已存在的 Authorization header', async () => {
+    it('retry 请求应携带刷新后的新 token', async () => {
       let refreshed = false
       const authHookCalls: string[] = []
 
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
+        responseParser: { responseReturn: 'data' },
         auth: {
           getToken: () => refreshed ? 'new-token' : 'old-token',
           refreshToken: {
@@ -1650,19 +1579,22 @@ describe('request 核心功能测试', () => {
         },
         extendedHooks: {
           beforeRequest: {
-            append: [(req) => {
-              authHookCalls.push(req.headers.get('Authorization') || '')
+            append: [({ request }) => {
+              authHookCalls.push(request.headers.get('Authorization') || '')
             }],
           },
         },
       })
 
-      await to(request.get('/auth/protected'))
+      // 初始请求带 old-token → 401 → 刷新 → ky.retry 显式携带 new-token → 成功
+      const result = await request.get('/auth/protected')
 
-      // 第一次调用：旧 token
+      // beforeRequest 仅在初始请求执行一次，观察到 old-token（重试走 beforeRetry，不再重跑 beforeRequest）
+      expect(authHookCalls).toHaveLength(1)
       expect(authHookCalls[0]).toContain('old-token')
-      // 第二次调用（retry）：新 token（auth hook 自然设置）
-      expect(authHookCalls[1]).toContain('new-token')
+      // 重试由 ky.retry 携带新 token 发起，最终成功（服务端仅对 new-token 返回成功）
+      expect(result).toEqual({ id: 1, name: 'user' })
+      expect(refreshed).toBe(true)
     })
 
     it('重试请求返回 401 不应该再次刷新', async () => {
@@ -1671,7 +1603,7 @@ describe('request 核心功能测试', () => {
       let tokenRefreshed = false
 
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: {
           getToken: () => tokenRefreshed ? 'new-token' : 'token',
           refreshToken: {
@@ -1700,7 +1632,7 @@ describe('request 核心功能测试', () => {
       const requestHeaders: string[][] = []
 
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: {
           getToken: () => refreshed ? 'new-token' : 'expired-token',
           refreshToken: {
@@ -1713,9 +1645,9 @@ describe('request 核心功能测试', () => {
         },
         extendedHooks: {
           beforeRequest: {
-            append: [(req) => {
+            append: [({ request }) => {
               const headers: string[] = []
-              req.headers.forEach((value, key) => {
+              request.headers.forEach((value, key) => {
                 headers.push(`${key}: ${value}`)
               })
               requestHeaders.push(headers)
@@ -1741,7 +1673,7 @@ describe('request 核心功能测试', () => {
       let tokenRefreshed = false
 
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: {
           getToken: () => tokenRefreshed ? 'new-token' : 'token',
           refreshToken: {
@@ -1767,12 +1699,12 @@ describe('request 核心功能测试', () => {
       expect(refreshCount).toBeGreaterThanOrEqual(1)
     })
 
-    it('pOST 请求 401 后应成功 retry', async () => {
+    it('pOST 请求 401 后应成功 retry（携带新 token 并保留原 body）', async () => {
       let refreshed = false
-      let postCount = 0
 
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
+        responseParser: { responseReturn: 'data' },
         auth: {
           getToken: () => refreshed ? 'new-token' : 'expired-token',
           refreshToken: {
@@ -1783,35 +1715,31 @@ describe('request 核心功能测试', () => {
             },
           },
         },
-        extendedHooks: {
-          beforeRequest: {
-            append: [(req) => {
-              if (req.method === 'POST') {
-                postCount++
-              }
-            }],
-          },
-        },
       })
 
-      // 模拟：第一次 POST 返回 401，刷新后重试成功
-      await request.post('/auth/protected', { json: { name: 'test' } })
+      // 第一次 POST 用过期 token → 401 → 刷新 → ky.retry 携带新 token 与原 body 重发 → 成功
+      const data = await request.post<{ id: number, name: string, received: unknown }>(
+        '/auth/protected',
+        { name: 'test' },
+      )
 
-      expect(postCount).toBe(2) // 原始请求 + retry
       expect(refreshed).toBe(true)
+      expect(data.id).toBe(1) // 重试成功并解包 data
+      expect(data.received).toEqual({ name: 'test' }) // 原 body 在重试中完整保留
     })
 
-    it('formData 上传请求应正常工作（即使无法 retry）', async () => {
-      let tokenRefreshed = false
+    it('formData 上传请求 401 后也应能 retry（ky.retry 不再特殊跳过 FormData）', async () => {
+      let refreshed = false
 
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
+        responseParser: { responseReturn: 'data' },
         auth: {
-          getToken: () => tokenRefreshed ? 'new-token' : 'expired-token',
+          getToken: () => refreshed ? 'new-token' : 'expired-token',
           refreshToken: {
             getRefreshToken: () => 'refresh-token',
             refresh: async () => {
-              tokenRefreshed = true
+              refreshed = true
               return 'new-token'
             },
           },
@@ -1821,13 +1749,12 @@ describe('request 核心功能测试', () => {
       const formData = new FormData()
       formData.append('file', new Blob(['test']), 'test.txt')
 
-      // FormData 请求应该能正常发送
-      // 注意：由于 FormData 不会被 clone，401 retry 会失败
-      // 但这是预期的优化行为（避免大文件的内存压力）
-      await to(request.post('/upload', { body: formData }))
+      // 旧实现因 WeakMap 跳过 FormData 而无法 retry；新实现交给 ky.retry，应能刷新并重试成功
+      const [error, data] = await to(request.post('/auth/protected', formData))
 
-      // 验证请求确实发送了（即使可能失败）
-      expect(true).toBe(true)
+      expect(refreshed).toBe(true)
+      expect(error).toBeNull()
+      expect((data as any)?.id).toBe(1)
     })
 
     it('retry 成功后再次 401 应能再次刷新', async () => {
@@ -1835,7 +1762,7 @@ describe('request 核心功能测试', () => {
       let tokenRefreshed = false
 
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: {
           getToken: () => tokenRefreshed ? 'new-token' : 'expired-token',
           refreshToken: {
@@ -1872,7 +1799,7 @@ describe('request 核心功能测试', () => {
       let tokenRefreshed = false
 
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: {
           getToken: () => tokenRefreshed ? 'new-token' : 'expired-token',
           refreshToken: {
@@ -1918,7 +1845,7 @@ describe('request 核心功能测试', () => {
       })
 
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: {
           getToken: () => tokenRefreshed ? 'new-token' : 'expired-token',
           refreshToken: {
@@ -1957,7 +1884,7 @@ describe('request 核心功能测试', () => {
       })
 
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: {
           getToken: () => 'expired-token',
           refreshToken: {
@@ -1990,7 +1917,7 @@ describe('request 核心功能测试', () => {
       let tokenRefreshed = false
 
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: {
           getToken: () => tokenRefreshed ? 'new-token' : 'expired-token',
           refreshToken: {
@@ -2023,7 +1950,7 @@ describe('request 核心功能测试', () => {
       })
 
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         onUnauthorized,
       })
 
@@ -2046,7 +1973,7 @@ describe('request 核心功能测试', () => {
       })
 
       const request = new Request({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: {
           getToken: () => 'expired-token',
           refreshToken: {
@@ -2068,50 +1995,6 @@ describe('request 核心功能测试', () => {
       )
 
       consoleErrorSpy.mockRestore()
-    })
-
-    it('request.clone() 失败应降级处理', async () => {
-      const originalClone = globalThis.Request.prototype.clone
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      let cloneCallCount = 0
-
-      // @ts-expect-error - Mocking clone for testing
-      globalThis.Request.prototype.clone = function () {
-        cloneCallCount++
-        // 只在第一次调用时抛出错误（auth hook 的调用）
-        // ky 内部也会调用 clone，但那些调用应该成功
-        if (cloneCallCount === 1) {
-          throw new Error('Clone failed')
-        }
-        return originalClone.call(this)
-      }
-
-      try {
-        const request = new Request({
-          prefixUrl: baseUrl,
-          auth: {
-            getToken: () => 'token',
-            refreshToken: {
-              getRefreshToken: () => 'refresh-token',
-              refresh: async () => 'new-token',
-            },
-          },
-        })
-
-        // 验证即使 clone 失败，请求仍然能发送
-        await request.post('/echo', { name: 'test' })
-
-        // 验证警告被记录
-        expect(consoleWarnSpy).toHaveBeenCalledWith(
-          '[kk-request] Failed to clone request body for retry:',
-          expect.any(Error),
-        )
-      }
-      finally {
-        // @ts-expect-error - Restoring original clone
-        globalThis.Request.prototype.clone = originalClone
-        consoleWarnSpy.mockRestore()
-      }
     })
   })
 })

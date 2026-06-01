@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { createClient, Request } from '../src'
 
 declare global {
-  // eslint-disable-next-line vars-on-top, no-var
+  // eslint-disable-next-line vars-on-top
   var __TEST_SERVER_URL__: string
 }
 
@@ -22,7 +22,7 @@ describe('createClient 工厂函数', () => {
 
     it('传入配置应返回配置正确的 Request 实例', () => {
       const client = createClient({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         timeout: 5000,
       })
       expect(client).toBeInstanceOf(Request)
@@ -59,7 +59,7 @@ describe('createClient 工厂函数', () => {
 
     it('实例配置应互不影响', async () => {
       const client1 = createClient({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: {
           responseReturn: 'data',
           codeField: 'success',
@@ -71,7 +71,7 @@ describe('createClient 工厂函数', () => {
       })
 
       const client2 = createClient({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: {
           responseReturn: 'body',
         },
@@ -93,7 +93,7 @@ describe('createClient 工厂函数', () => {
   describe('完整配置测试', () => {
     it('应正确应用 auth 配置', async () => {
       const client = createClient({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         auth: {
           getToken: () => 'test-token',
         },
@@ -113,7 +113,7 @@ describe('createClient 工厂函数', () => {
 
     it('应正确应用 getHeaders 配置', async () => {
       const client = createClient({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         getHeaders: () => ({
           'X-Custom-Header': 'custom-value',
         }),
@@ -133,7 +133,7 @@ describe('createClient 工厂函数', () => {
 
     it('应正确应用 responseParser 配置', async () => {
       const client = createClient({
-        prefixUrl: baseUrl,
+        prefix: baseUrl,
         responseParser: {
           responseReturn: 'data',
           codeField: 'code',
