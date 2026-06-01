@@ -179,10 +179,10 @@ const http = createClient({
   },
 })
 
-// unwrap: true (默认) - 只返回 data 字段
+// 不传 unwrap - 跟随实例 responseParser 配置（此处返回 data 字段）
 const data = await http.get('/api')
 
-// unwrap: false - 返回完整响应体 { code, data, message }
+// unwrap: false - 覆盖实例配置，返回完整响应体 { code, data, message }
 const response = await http.get('/api', { unwrap: false })
 ```
 

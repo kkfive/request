@@ -16,10 +16,13 @@ src/
 │       ├── params-serializer.ts # URL 参数序列化
 │       ├── response-parser.ts   # 响应解析
 │       └── unauthorized.ts      # 401 处理和 token 刷新
+├── sse/
+│   └── stream.ts          # SSE 流式请求（SSEStream 类 + 工厂函数）
 ├── types/
 │   ├── options.ts         # 配置选项类型
 │   ├── hooks.ts           # Hook 系统类型
-│   └── response.ts        # 响应解析类型
+│   ├── response.ts        # 响应解析类型
+│   └── sse.ts             # SSE 类型
 ├── errors/
 │   └── request-error.ts   # 统一错误类
 └── utils/

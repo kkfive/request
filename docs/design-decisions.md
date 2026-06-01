@@ -115,13 +115,14 @@ if (auth?.refreshToken && request.method !== 'GET' && request.body) {
 function createUnauthorizedHook(...): AfterResponseHook {
   // 闭包级 Promise，每个 hook 实例独立
   let refreshPromise: Promise<string> | null = null
-  let isRefreshInitiator = false
 
   return async (request, options, response) => {
     if (response.status === 401) {
+      // 标记是否为本次刷新的发起者（函数内部声明，每个请求独立）
+      let shouldTriggerCallback = false
       // 如果已有刷新请求，等待它完成；否则立即创建 Promise 占位
       if (!refreshPromise) {
-        isRefreshInitiator = true
+        shouldTriggerCallback = true
         refreshPromise = (async () => {
           const refreshToken = await auth.refreshToken.getRefreshToken()
           return await auth.refreshToken.refresh(refreshToken)

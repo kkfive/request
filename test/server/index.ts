@@ -285,7 +285,3 @@ export function stopServer(): Promise<void> {
     }
   })
 }
-
-export function getServerUrl(): string {
-  return `http://localhost:${serverPort}`
-}
