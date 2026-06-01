@@ -3,8 +3,12 @@
   createClient: function
   createContentTypeHook: function
   createResponseParserHook: function
+  createSSEStream: function
+  createSSEStreamFromResponse: function
   createUnauthorizedHook: function
   paramsSerializerHook: function
   Request: function
   RequestError: function
+  sse: function
+  SSEStream: function
   to: function

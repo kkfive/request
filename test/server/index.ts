@@ -206,6 +206,61 @@ export function startServer(): Promise<string> {
         res.statusCode = 418
         res.end(JSON.stringify({ message: 'I\'m a teapot' }))
       }
+
+      // SSE 端点
+      else if (url.pathname === '/sse/chat') {
+        const body = await parseBody(req)
+        let parsed: any = {}
+        try {
+          parsed = JSON.parse(body)
+        }
+        catch {}
+
+        const chunks = parsed.chunks || [
+          { choices: [{ delta: { content: 'Hello' } }] },
+          { choices: [{ delta: { content: ' world' } }] },
+          { choices: [{ delta: { content: '!' } }] },
+        ]
+
+        res.setHeader('Content-Type', 'text/event-stream')
+        res.setHeader('Cache-Control', 'no-cache')
+        res.setHeader('Connection', 'keep-alive')
+        res.statusCode = 200
+
+        for (const chunk of chunks) {
+          res.write(`data: ${JSON.stringify(chunk)}\n\n`)
+        }
+        res.write('data: [DONE]\n\n')
+        res.end()
+      }
+      else if (url.pathname === '/sse/generic') {
+        res.setHeader('Content-Type', 'text/event-stream')
+        res.setHeader('Cache-Control', 'no-cache')
+        res.setHeader('Connection', 'keep-alive')
+        res.statusCode = 200
+
+        res.write(`event: custom\ndata: first event\nid: 1\n\n`)
+        res.write(`data: second event\nid: 2\nretry: 3000\n\n`)
+        res.write(`event: special\ndata: {"key":"value"}\nid: 3\n\n`)
+        res.end()
+      }
+      else if (url.pathname === '/sse/headers') {
+        const authorization = req.headers.authorization || null
+        const customHeader = req.headers['x-custom'] || null
+
+        res.setHeader('Content-Type', 'text/event-stream')
+        res.setHeader('Cache-Control', 'no-cache')
+        res.setHeader('Connection', 'keep-alive')
+        res.statusCode = 200
+
+        res.write(`data: ${JSON.stringify({ authorization, customHeader })}\n\n`)
+        res.write('data: [DONE]\n\n')
+        res.end()
+      }
+      else if (url.pathname === '/sse/error') {
+        res.statusCode = 500
+        res.end(JSON.stringify({ message: 'Internal Server Error' }))
+      }
       else {
         res.statusCode = 404
         res.end(JSON.stringify({ message: 'Not Found' }))

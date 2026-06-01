@@ -30,3 +30,14 @@ export type {
   ResponseReturnMode,
 } from './response'
 export type { ResponseParserConfig as ResponseParserOptions } from './response'
+
+// SSE 类型
+export type {
+  SSECloseHandler,
+  SSEConfig,
+  SSEErrorHandler,
+  SSEEvent,
+  SSEEventHandler,
+  SSEFromResponseOptions,
+  SSEStream,
+} from './sse'
