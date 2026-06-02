@@ -10,6 +10,6 @@ description: >-
 
 # kk-request（注册 stub）
 
-正式内容在 [`../../../skills/kk-request/SKILL.md`](../../../skills/kk-request/SKILL.md)。
+正式内容在 [`../../../.agents/skills/kk-request/SKILL.md`](../../../.agents/skills/kk-request/SKILL.md)。
 
 **立即读它**，并按其 Common Tasks 表路由到对应 rules / workflows / references。本 stub 不复制规则正文。
