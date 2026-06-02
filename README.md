@@ -6,11 +6,10 @@
 
 **kk-request 是一个封装层，不是完整的 HTTP 客户端**。它专注于提供业务层的请求封装能力：
 
-- ✅ Token 注入（支持 refresh token 自动刷新）
-- ✅ 响应解析
-- ✅ 业务错误处理
+- ✅ Token 注入（支持 refresh token 自动刷新，基于 `ky.retry()`）
+- ✅ 响应解析（raw / body / data 三种模式）
+- ✅ 业务错误（`BusinessError`）与 ky 原生传输错误区分
 - ✅ 生命周期回调
-- ✅ 国际化错误消息
 - ✅ SSE 流式请求（基于 [parse-sse](https://github.com/sindresorhus/parse-sse)）
 
 **高级功能交由专业工具处理**：
@@ -26,7 +25,7 @@
 
 ```typescript
 const http = createClient({
-  prefixUrl: 'https://api.example.com',
+  prefix: 'https://api.example.com',
   auth: { getToken: () => localStorage.getItem('token') },
   responseParser: { responseReturn: 'data' },
 })
@@ -70,8 +69,10 @@ const { data } = useQuery({
 ## 安装
 
 ```bash
-pnpm add @kkfive/request ky qs parse-sse
+pnpm add @kkfive/request
 ```
+
+> ky / qs / parse-sse 已作为直接依赖随包安装，无需手动安装。
 
 ## 快速开始
 
@@ -79,7 +80,7 @@ pnpm add @kkfive/request ky qs parse-sse
 import { createClient } from '@kkfive/request'
 
 const http = createClient({
-  prefixUrl: 'https://api.example.com',
+  prefix: 'https://api.example.com',
   responseParser: {
     responseReturn: 'data',
     codeField: 'code',
@@ -95,6 +96,8 @@ const users = await http.get<User[]>('/users')
 const user = await http.post<User>('/users', { name: 'test' })
 ```
 
+> 💡 完整的可运行示例（含 token 刷新、错误处理、SSE）见 [`examples/index.ts`](./examples/index.ts)。
+
 ## 功能特性
 
 ### Token 注入
@@ -103,7 +106,7 @@ const user = await http.post<User>('/users', { name: 'test' })
 
 ```typescript
 const http = createClient({
-  prefixUrl: 'https://api.example.com',
+  prefix: 'https://api.example.com',
   auth: {
     getToken: async () => localStorage.getItem('token'),
     headerName: 'token', // 默认 'Authorization'
@@ -149,19 +152,32 @@ const http = createClient({
 - ✅ 并发请求去重，多个 401 只刷新一次
 - ✅ 刷新成功后自动重试原请求
 - ✅ 支持异步回调（`onRefreshSuccess` 可以是 async 函数）
-- ✅ FormData 上传自动优化，跳过 body clone 以减少内存占用
+- ✅ POST / PUT / FormData 在 401 后同样能刷新并重试（基于 ky 原生 `ky.retry()`）
 
-### 国际化错误消息
+### 错误处理
 
-支持中英文错误消息：
+错误分两类，互不混淆：
+
+- **业务错误 `BusinessError`**：HTTP 2xx 但业务 `code` 不符，携带 `code` / `raw` / `response`
+- **传输层错误**：ky 原生的 `HTTPError` / `NetworkError` / `TimeoutError` / `ForceRetryError`，均从本包重新导出
 
 ```typescript
-const http = createClient({
-  locale: 'en', // 'zh' | 'en'，默认 'zh'
-  responseParser: {
-    responseReturn: 'data',
-  },
-})
+import { BusinessError, isHTTPError, isTimeoutError } from '@kkfive/request'
+
+try {
+  const users = await http.get<User[]>('/users')
+}
+catch (error) {
+  if (error instanceof BusinessError) {
+    console.log(error.code, error.raw) // 业务错误码与原始响应体
+  }
+  else if (isHTTPError(error)) {
+    console.log(error.response.status, error.data) // HTTP 错误
+  }
+  else if (isTimeoutError(error)) {
+    // 超时
+  }
+}
 ```
 
 ### 响应解析
@@ -185,6 +201,56 @@ const data = await http.get('/api')
 // unwrap: false - 覆盖实例配置，返回完整响应体 { code, data, message }
 const response = await http.get('/api', { unwrap: false })
 ```
+
+### Schema 校验
+
+传入 `schema`（[Standard Schema](https://github.com/standard-schema/standard-schema)，兼容 zod 3.24+ / valibot / arktype 或手写）即可校验响应数据，**返回类型自动从 schema 推导**，无需手动 `<T>`：
+
+```typescript
+import { z } from 'zod'
+
+const userSchema = z.object({ id: z.number(), name: z.string() })
+
+// user 类型自动推导为 { id: number, name: string }
+const user = await http.get('/users/1', { schema: userSchema })
+```
+
+校验对象随响应模式而定：`data` 模式校验提取后的 data、`body` 模式校验完整响应体；`raw` 模式不校验（传 schema 会告警一次）。校验顺序在业务码之后——先确认业务成功，再校验数据结构。
+
+#### 三态校验模式
+
+`schemaValidation` 控制校验行为，实例级配置、请求级可覆盖：
+
+| 模式 | 校验 | 失败行为 | 适用 |
+|------|------|----------|------|
+| `strict`（默认） | ✅ | 抛 `SchemaValidationError` | 开发 / 测试，尽早暴露 |
+| `warn` | ✅ | 不抛，调用 `onValidationError` 或 `console.warn`，降级返回原始数据 | 生产监控 schema 漂移但不中断业务 |
+| `off` | ❌ | 直接返回数据 | 完全信任后端 / 追求极致开销 |
+
+```typescript
+const http = createClient({
+  responseParser: { responseReturn: 'data', successCode: 0 },
+  // 库不读环境变量；由调用处用打包器变量映射，让 bundler 把模式固化为常量
+  schemaValidation: import.meta.env.PROD ? 'warn' : 'strict',
+  onValidationError: issues => reportToSentry(issues), // warn 模式失败上报（取代默认 console.warn）
+})
+```
+
+`SchemaValidationError` 属结构层错误（请求本身已成功），**不触发** `onError` / `makeErrorMessage`；从 `@kkfive/request` 导入以便 `instanceof` 判断（与 `HTTPError` 等一致）：
+
+```typescript
+import { SchemaValidationError } from '@kkfive/request'
+
+try {
+  const user = await http.get('/users/1', { schema: userSchema })
+}
+catch (error) {
+  if (error instanceof SchemaValidationError)
+    console.error(error.issues) // 校验失败的字段详情
+}
+```
+
+> 零运行时依赖：仅依赖 ky 透传的 `StandardSchemaV1` 类型接口，不绑定具体校验库。
 
 ### 生命周期回调
 
@@ -250,7 +316,7 @@ const text = await http.raw.get('/markdown').text()
 import { createClient, createSSEStream } from '@kkfive/request'
 
 const client = createClient({
-  prefixUrl: 'https://api.openai.com/v1',
+  prefix: 'https://api.openai.com/v1',
   auth: { getToken: () => 'sk-xxx' },
 })
 
@@ -319,6 +385,60 @@ for await (const event of stream) {
 | `headers` | `Record<string, string>` | - | 额外 headers |
 | `body` | `unknown` | - | 请求体 |
 
+## 配合 @tanstack/query
+
+kk-request 负责业务层封装；缓存、重试、去重交给 @tanstack/query，职责分明。
+
+### 基础集成
+
+```typescript
+import { createClient } from '@kkfive/request'
+import { useQuery } from '@tanstack/react-query'
+
+const http = createClient({
+  prefix: 'https://api.example.com',
+  responseParser: { responseReturn: 'data' },
+})
+
+function UserList() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => http.get<User[]>('/users'),
+  })
+
+  if (isLoading)
+    return <div>Loading...</div>
+  return <div>{data?.map(user => <div key={user.id}>{user.name}</div>)}</div>
+}
+```
+
+### 带缓存和重试
+
+```typescript
+const { data } = useQuery({
+  queryKey: ['users'],
+  queryFn: () => http.get<User[]>('/users'),
+  staleTime: 60000, // 缓存 1 分钟（由 @tanstack/query 处理）
+  retry: 3, // 失败重试 3 次（由 @tanstack/query 处理）
+})
+```
+
+### Mutation 示例
+
+```typescript
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+
+function CreateUser() {
+  const queryClient = useQueryClient()
+  const mutation = useMutation({
+    mutationFn: (newUser: CreateUserDto) => http.post<User>('/users', newUser),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  })
+
+  return <form onSubmit={() => mutation.mutate({ name: 'test' })}>{/* ... */}</form>
+}
+```
+
 ## API 参考
 
 ### createClient(options?)
@@ -329,17 +449,19 @@ for await (const event of stream) {
 
 | 选项 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `prefixUrl` | `string` | - | 请求 URL 前缀 |
+| `prefix` | `string` | - | 请求 URL 前缀（ky 2.0，取代旧的 `prefixUrl`） |
 | `timeout` | `number` | `10000` | 超时时间（毫秒） |
 | `headers` | `Record<string, string>` | - | 请求头 |
 | `responseParser` | `ResponseParserOptions` | - | 响应解析配置 |
 | `auth` | `AuthOptions` | - | 认证配置 |
 | `getHeaders` | `() => Record<string, string>` | - | 动态获取额外 headers |
-| `locale` | `'zh' \| 'en'` | `'zh'` | 错误消息语言 |
 | `onRequest` | `(method, url) => void` | - | 请求发送前回调 |
 | `onResponse` | `(method, url, status) => void` | - | 响应返回后回调 |
-| `onError` | `(error, response?) => void` | - | 错误发生时回调 |
+| `onError` | `(error: Error, response?) => void` | - | 错误发生时回调（业务错误为 BusinessError，传输错误为 ky 原生类型；不含 SchemaValidationError） |
 | `onUnauthorized` | `() => void` | - | 401 未授权时回调 |
+| `schema` | `StandardSchemaV1` | - | 响应校验 schema，传入后返回类型自动推导（zod 3.24+ / valibot / …） |
+| `schemaValidation` | `'strict' \| 'warn' \| 'off'` | `'strict'` | schema 校验模式（见 [Schema 校验](#schema-校验)） |
+| `onValidationError` | `(issues) => void` | - | warn 模式校验失败回调（取代默认 console.warn） |
 
 #### AuthOptions
 
@@ -377,6 +499,9 @@ http.post<T>(url, data?, config?)
 http.put<T>(url, data?, config?)
 http.patch<T>(url, data?, config?)
 http.delete<T>(url, config?)
+
+// 传入 config.schema 时返回类型自动推导为 schema 输出类型（优先于手动 <T>）
+const user = await http.get('/users/1', { schema: userSchema }) // => 推导自 schema
 ```
 
 ### 请求级配置

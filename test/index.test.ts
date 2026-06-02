@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Request, RequestError } from '../src'
+import { BusinessError, HTTPError, isHTTPError, Request } from '../src'
 
 describe('exports', () => {
   it('should export Request class', () => {
@@ -7,8 +7,13 @@ describe('exports', () => {
     expect(typeof Request).toBe('function')
   })
 
-  it('should export RequestError class', () => {
-    expect(RequestError).toBeDefined()
-    expect(typeof RequestError).toBe('function')
+  it('should export BusinessError class', () => {
+    expect(BusinessError).toBeDefined()
+    expect(typeof BusinessError).toBe('function')
+  })
+
+  it('should re-export ky transport error types and guards', () => {
+    expect(HTTPError).toBeDefined()
+    expect(typeof isHTTPError).toBe('function')
   })
 })

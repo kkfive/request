@@ -1,12 +1,10 @@
-import type { AfterResponseHook, BeforeRequestHook, Hooks, KyInstance } from 'ky'
+import type { AfterResponseHook, BeforeRequestHook, Hooks } from 'ky'
 import type { BuiltInHookName, BuiltInHooksConfig, ExtendedHooks, HookArrayConfig, RequestConfig } from '../types'
-import {
-  createAuthHook,
-  createContentTypeHook,
-  createResponseParserHook,
-  createUnauthorizedHook,
-  paramsSerializerHook,
-} from './builtin'
+import { createAuthHook } from './auth'
+import { createContentTypeHook } from './content-type'
+import { paramsSerializerHook } from './params-serializer'
+import { createResponseParserHook } from './response-parser'
+import { createUnauthorizedHook } from './unauthorized'
 
 /**
  * 解析 Hook 数组配置
@@ -69,7 +67,7 @@ function getReplacementHook<T>(
 /**
  * 解析并构建最终的 hooks 配置
  */
-function resolveHooks(config: RequestConfig, getKyInstance?: () => KyInstance): Hooks {
+function resolveHooks(config: RequestConfig): Hooks {
   const { features, extendedHooks, auth, getHeaders, onUnauthorized, responseParser, hooks } = config
 
   const control = extendedHooks?.control
@@ -116,7 +114,7 @@ function resolveHooks(config: RequestConfig, getKyInstance?: () => KyInstance): 
   // unauthorized hook
   if (!isHookDisabled('unauthorized', features, control)) {
     const replacement = getReplacementHook<AfterResponseHook>('unauthorized', control)
-    afterResponse.push(replacement ?? createUnauthorizedHook(onUnauthorized, auth, getKyInstance))
+    afterResponse.push(replacement ?? createUnauthorizedHook(onUnauthorized, auth))
   }
 
   // responseParser hook

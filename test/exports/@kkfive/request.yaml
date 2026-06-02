@@ -1,4 +1,5 @@
 .:
+  BusinessError: function
   createAuthHook: function
   createClient: function
   createContentTypeHook: function
@@ -6,9 +7,19 @@
   createSSEStream: function
   createSSEStreamFromResponse: function
   createUnauthorizedHook: function
+  ForceRetryError: function
+  HTTPError: function
+  isForceRetryError: function
+  isHTTPError: function
+  isKyError: function
+  isNetworkError: function
+  isTimeoutError: function
+  KyError: function
+  NetworkError: function
   paramsSerializerHook: function
   Request: function
-  RequestError: function
+  SchemaValidationError: function
   sse: function
   SSEStream: function
+  TimeoutError: function
   to: function
