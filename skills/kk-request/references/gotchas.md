@@ -1,8 +1,8 @@
 # 常见陷阱
 
-[← 返回 CLAUDE.md](../CLAUDE.md)
+[← SKILL.md](../SKILL.md)
 
-本文档列出开发中最容易遇到的陷阱，每个都提供错误示例、正确示例和详细解释。
+本文档列出开发中最容易遇到的陷阱，每个都提供错误示例、正确示例和详细解释。简洁版的 always/never 约束见 [../rules/hook-authoring.md](../rules/hook-authoring.md)。
 
 ---
 
@@ -200,8 +200,8 @@ ky 2.0 传给 hook 的 `options` 是 `Object.freeze` 后的归一化选项，在
 ## 相关文档
 
 - [设计决策](./design-decisions.md) - 了解这些陷阱背后的设计原理
-- [Hook 开发指南](./hook-development.md) - 学习正确的 Hook 开发模式
-- [约束和限制](./constraints.md) - 了解更多技术限制
+- [Hook 开发指南](../workflows/add-custom-hook.md) - 学习正确的 Hook 开发模式
+- [约束和限制](../rules/boundaries.md) - 了解更多技术限制
 - [架构设计](./architecture.md) - 了解 Hook 系统的实现
 
-[← 返回 CLAUDE.md](../CLAUDE.md)
+[← SKILL.md](../SKILL.md)

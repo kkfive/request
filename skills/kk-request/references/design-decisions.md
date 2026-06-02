@@ -1,8 +1,8 @@
 # 设计决策
 
-[← 返回 CLAUDE.md](../CLAUDE.md)
+[← SKILL.md](../SKILL.md)
 
-本文档记录了 kk-request 的关键设计决策及其理由。
+本文档记录 kk-request 的关键设计决策及其**理由（why）**。硬性「必须怎么做」的约束见 [../rules/hook-authoring.md](../rules/hook-authoring.md) 与 [../rules/error-model.md](../rules/error-model.md)。
 
 ---
 
@@ -48,7 +48,7 @@ createClient({
 ```
 
 > ⚠️ ky 2.0 的 hook 采用 **state 对象**签名 `({ request, options, response, retryCount }) => ...`，
-> 不再是 1.x 的位置参数 `(request, options, response) => ...`。编写自定义 hook 时请使用前者。
+> 不再是 1.x 的位置参数。编写自定义 hook 的硬约束见 [../rules/hook-authoring.md](../rules/hook-authoring.md)。
 
 ---
 
@@ -143,39 +143,20 @@ return async ({ request, response, retryCount }) => {
 - **职责清晰**：传输层是 ky 的领域，业务层是 kk-request 的领域；`instanceof BusinessError` 即业务错误判定
 - **可用官方守卫**：消费方可直接用 `isHTTPError` / `isTimeoutError` 等 ky 类型守卫
 
+> 消费方应如何区分处理这两类错误，见 [../rules/error-model.md](../rules/error-model.md)。
+
 ### 实现位置
 - `src/errors/business-error.ts` - `BusinessError` 类（`errors/` 为目录，便于后续新增其它错误类型）
 - `src/client/request.ts` - catch 块原样抛出，仅触发生命周期回调
 - `src/hooks/response-parser.ts` - 仅在业务 code 不符时抛出 `BusinessError`
-
-### 消费方示例
-
-```typescript
-import { BusinessError, isHTTPError, isTimeoutError } from '@kkfive/request'
-
-try {
-  const data = await http.get('/users')
-}
-catch (e) {
-  if (e instanceof BusinessError) {
-    // 业务错误：e.code（业务码）、e.raw（原始响应体）
-  }
-  else if (isHTTPError(e)) {
-    // HTTP 错误：e.response.status、e.data
-  }
-  else if (isTimeoutError(e)) {
-    // 超时
-  }
-}
-```
 
 ---
 
 ## 相关文档
 
 - [架构设计](./architecture.md) - 了解整体架构
-- [Hook 开发指南](./hook-development.md) - 学习如何应用这些设计
-- [常见陷阱](./pitfalls.md) - 避免违反设计约束
-- [约束和限制](./constraints.md) - 了解设计带来的限制
+- [Hook 开发指南](../workflows/add-custom-hook.md) - 学习如何应用这些设计
+- [常见陷阱](./gotchas.md) - 避免违反设计约束
+- [约束和限制](../rules/boundaries.md) - 了解设计带来的限制
 
-[← 返回 CLAUDE.md](../CLAUDE.md)
+[← SKILL.md](../SKILL.md)

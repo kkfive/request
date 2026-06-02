@@ -1,6 +1,6 @@
 # 架构设计
 
-[← 返回 CLAUDE.md](../CLAUDE.md)
+[← SKILL.md](../SKILL.md)
 
 ## 目录结构
 
@@ -111,7 +111,7 @@ afterResponse:
 
 ### 错误处理 (`src/errors/business-error.ts` + ky 原生错误)
 
-错误分两层，互不混淆：
+错误分两层，互不混淆（分层规则见 [../rules/error-model.md](../rules/error-model.md)）：
 
 - **业务错误 `BusinessError`**：HTTP 2xx 但业务 `code` 不符。携带 `code`（业务码）、`raw`（原始响应体）、`response`。
 - **传输层错误**：原样透传 ky 原生类型 —— `HTTPError`（非 2xx）、`NetworkError`、`TimeoutError`、`ForceRetryError`、`KyError`，均从本包重新导出，配合 `isHTTPError` 等守卫使用。
@@ -213,8 +213,8 @@ createClient({
 ## 相关文档
 
 - [设计决策](./design-decisions.md) - 了解为什么这样设计
-- [Hook 开发指南](./hook-development.md) - 学习如何开发自定义 Hook
-- [常见陷阱](./pitfalls.md) - 避免常见错误
-- [约束和限制](./constraints.md) - 了解技术限制
+- [Hook 开发指南](../workflows/add-custom-hook.md) - 学习如何开发自定义 Hook
+- [常见陷阱](./gotchas.md) - 避免常见错误
+- [约束和限制](../rules/boundaries.md) - 了解技术限制
 
-[← 返回 CLAUDE.md](../CLAUDE.md)
+[← SKILL.md](../SKILL.md)
