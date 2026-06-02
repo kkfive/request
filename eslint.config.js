@@ -14,4 +14,10 @@ export default antfu(
       '**/docs',
     ],
   },
+  {
+    files: ['examples/**/*.ts'],
+    rules: {
+      'no-console': 'off', // 示例文件需要 console 演示输出
+    },
+  },
 )

@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.1.1",
   "packageManager": "pnpm@11.5.0",
-  "description": "A self-used request encapsulation",
+  "description": "Lightweight business-layer HTTP client built on ky: token injection, 401 auto-refresh, response parsing, BusinessError, and SSE",
   "author": "DreamyTZK",
   "license": "MIT",
   "homepage": "https://github.com/kkfive/request#readme",
@@ -12,7 +12,16 @@
     "url": "git+https://github.com/kkfive/request.git"
   },
   "bugs": "https://github.com/kkfive/request/issues",
-  "keywords": [],
+  "keywords": [
+    "http",
+    "http-client",
+    "request",
+    "fetch",
+    "ky",
+    "token-refresh",
+    "sse",
+    "typescript"
+  ],
   "sideEffects": false,
   "exports": {
     ".": {
@@ -26,7 +35,9 @@
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
   "files": [
-    "dist"
+    "dist",
+    "examples",
+    "llms.txt"
   ],
   "scripts": {
     "build": "unbuild",

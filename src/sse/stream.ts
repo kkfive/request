@@ -18,6 +18,12 @@ interface ListenerMap<T> {
 
 type ConsumeFn = () => Promise<void>
 
+/**
+ * SSE 流对象。由 {@link createSSEStream} / {@link createSSEStreamFromResponse} 创建，
+ * 一般不直接 `new`。支持两种消费方式，二选一（流只能被消费一次）：
+ * - **async iteration**：`for await (const event of stream) { ... }`
+ * - **emitter**：`stream.on('data' | 'error' | 'close', handler)`，配合 `await stream.done`
+ */
 class SSEStream<T = unknown> implements ISSEStream<T> {
   private abortController: AbortController
   private _response?: Response
@@ -51,20 +57,30 @@ class SSEStream<T = unknown> implements ISSEStream<T> {
     }).catch(() => { }) as Promise<void>
   }
 
+  /** 底层 `Response` 对象（请求发出后可用），可读取响应头、状态码等。 */
   get response(): Response | undefined {
     return this._response
   }
 
+  /** 流消费完成（正常结束或出错）后 resolve 的 Promise；emitter 模式下用 `await stream.done` 等待结束。 */
   get done(): Promise<void> {
     return this._done
   }
 
+  /** 主动取消流（中止底层请求）。 */
   cancel(): void {
     this.abortController.abort()
   }
 
   // --- Emitter ---
 
+  /**
+   * 注册事件监听器（emitter 模式）。首次调用会惰性启动流消费。
+   * - `data`：收到一条 SSE 事件
+   * - `error`：消费过程出错
+   * - `close`：流正常结束
+   * @returns 自身，支持链式调用
+   */
   on(event: 'data', handler: SSEEventHandler<T>): this
   on(event: 'error', handler: SSEErrorHandler): this
   on(event: 'close', handler: SSECloseHandler): this
@@ -274,6 +290,27 @@ class SSEStream<T = unknown> implements ISSEStream<T> {
 
 // --- 底层：接收 Response ---
 
+/**
+ * 从一个已有的 `Response` 创建可消费的 SSE 流（底层 API）。
+ *
+ * 适用于需要完全自定义请求参数的场景：先自行用 `client.raw(...)` 拿到 `Response`，再交给本函数解析。
+ *
+ * @param response 一个 `text/event-stream` 的 Response（body 可读）
+ * @param options SSE 解析配置：`parser` / `doneSignal` / `signal`
+ * @example
+ * ```typescript
+ * import { createSSEStreamFromResponse } from '@kkfive/request'
+ *
+ * const response = await client.raw('sse/chat', {
+ *   method: 'POST',
+ *   headers: { 'X-Custom': 'value' },
+ *   json: { messages },
+ * })
+ * const stream = createSSEStreamFromResponse(response)
+ * for await (const event of stream)
+ *   console.log(event.data)
+ * ```
+ */
 function createSSEStreamFromResponse<T = unknown>(
   response: Response,
   options?: SSEFromResponseOptions,
@@ -285,6 +322,39 @@ function createSSEStreamFromResponse<T = unknown>(
 
 // --- 高层：封装 ky 请求 ---
 
+/**
+ * 发起 SSE 请求并返回可消费的流（高层 API：一步完成请求 + 消费）。
+ *
+ * 支持两种消费模式，二选一（流只能被消费一次）：
+ * - **async iteration**：`for await (const event of stream)`
+ * - **emitter**：`stream.on('data' | 'error' | 'close', handler)`，配合 `await stream.done`
+ *
+ * @param kyInstance 底层 ky 实例，通常传 `client.raw`
+ * @param url 请求地址（相对实例的 `prefix`）
+ * @param data 请求体，默认以 JSON 发送（方法默认 `POST`）
+ * @param config SSE 配置：`parser` / `doneSignal` / `signal` / `timeout` / `method` / `headers`
+ * @example
+ * ```typescript
+ * import { createClient, createSSEStream } from '@kkfive/request'
+ *
+ * const client = createClient({ prefix: 'https://api.openai.com/v1', auth: { getToken: () => 'sk-xxx' } })
+ *
+ * // 模式一：async iteration
+ * const stream = createSSEStream(client.raw, '/chat/completions', {
+ *   model: 'gpt-4',
+ *   messages: [{ role: 'user', content: 'Hello' }],
+ *   stream: true,
+ * })
+ * for await (const event of stream)
+ *   process.stdout.write(event.data?.choices?.[0]?.delta?.content ?? '')
+ *
+ * // 模式二：emitter（多监听器）
+ * createSSEStream(client.raw, '/chat/completions', body)
+ *   .on('data', e => render(e.data))
+ *   .on('error', err => report(err))
+ *   .on('close', () => cleanup())
+ * ```
+ */
 function createSSEStream<T = unknown>(
   kyInstance: KyInstance,
   url: string,
@@ -302,6 +372,10 @@ function createSSEStream<T = unknown>(
 
 // --- 快捷函数 ---
 
+/**
+ * {@link createSSEStream} 的简写别名，参数与行为完全一致。
+ * @see {@link createSSEStream}
+ */
 function sse<T = unknown>(kyInstance: KyInstance, url: string, data?: unknown, config?: SSEConfig): ISSEStream<T> {
   return createSSEStream<T>(kyInstance, url, data, config)
 }

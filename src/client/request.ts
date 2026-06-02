@@ -5,6 +5,31 @@ import { BusinessError } from '../errors'
 import { resolveHooks } from '../hooks'
 import { merge } from '../utils'
 
+/**
+ * HTTP 请求客户端。通常通过 {@link createClient} 创建，而非直接 `new`。
+ *
+ * 提供 `get` / `post` / `put` / `patch` / `delete` 方法；返回值类型由实例级
+ * `responseParser.responseReturn` 与请求级 `unwrap` 共同决定。
+ *
+ * @example
+ * ```typescript
+ * const http = createClient({
+ *   prefix: 'https://api.example.com',
+ *   responseParser: { responseReturn: 'data' },
+ * })
+ *
+ * const users = await http.get<User[]>('/users')
+ * const created = await http.post<User>('/users', { name: 'kk' })
+ *
+ * // 请求级覆盖响应模式（返回完整响应体而非 data 字段）
+ * const full = await http.get('/users', { unwrap: false })
+ *
+ * // 取消请求
+ * const ac = Request.createAbortController()
+ * http.get('/slow', { signal: ac.signal })
+ * ac.abort()
+ * ```
+ */
 class Request {
   private readonly instance: KyInstance
   private readonly requestConfig: RequestConfig
@@ -60,7 +85,7 @@ class Request {
   }
 
   /**
-   * POST 请求方法
+   * POST 请求方法。`data` 为 `FormData` 时自动作为 body 发送（让浏览器设置 multipart 边界），否则按 JSON 发送。
    */
   public post<T = unknown>(url: string, data?: unknown, config?: RequestConfig): Promise<T> {
     if (data instanceof FormData) {
@@ -80,7 +105,8 @@ class Request {
   }
 
   /**
-   * 通用的请求方法
+   * 通用底层请求方法，`get` / `post` / `put` / `patch` / `delete` 均基于它实现。
+   * 抛错时原样抛出：业务错误为 `BusinessError`，传输层错误为 ky 原生类型（用 `isHTTPError` 等守卫区分）。
    */
   public async request<T = unknown>(url: string, config: RequestConfig): Promise<T> {
     const onRequest = config.onRequest ?? this.requestConfig.onRequest

@@ -96,6 +96,8 @@ const users = await http.get<User[]>('/users')
 const user = await http.post<User>('/users', { name: 'test' })
 ```
 
+> 💡 完整的可运行示例（含 token 刷新、错误处理、SSE）见 [`examples/index.ts`](./examples/index.ts)。
+
 ## 功能特性
 
 ### Token 注入
@@ -332,6 +334,60 @@ for await (const event of stream) {
 | `method` | `string` | `'POST'` | HTTP 方法 |
 | `headers` | `Record<string, string>` | - | 额外 headers |
 | `body` | `unknown` | - | 请求体 |
+
+## 配合 @tanstack/query
+
+kk-request 负责业务层封装；缓存、重试、去重交给 @tanstack/query，职责分明。
+
+### 基础集成
+
+```typescript
+import { createClient } from '@kkfive/request'
+import { useQuery } from '@tanstack/react-query'
+
+const http = createClient({
+  prefix: 'https://api.example.com',
+  responseParser: { responseReturn: 'data' },
+})
+
+function UserList() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => http.get<User[]>('/users'),
+  })
+
+  if (isLoading)
+    return <div>Loading...</div>
+  return <div>{data?.map(user => <div key={user.id}>{user.name}</div>)}</div>
+}
+```
+
+### 带缓存和重试
+
+```typescript
+const { data } = useQuery({
+  queryKey: ['users'],
+  queryFn: () => http.get<User[]>('/users'),
+  staleTime: 60000, // 缓存 1 分钟（由 @tanstack/query 处理）
+  retry: 3, // 失败重试 3 次（由 @tanstack/query 处理）
+})
+```
+
+### Mutation 示例
+
+```typescript
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+
+function CreateUser() {
+  const queryClient = useQueryClient()
+  const mutation = useMutation({
+    mutationFn: (newUser: CreateUserDto) => http.post<User>('/users', newUser),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  })
+
+  return <form onSubmit={() => mutation.mutate({ name: 'test' })}>{/* ... */}</form>
+}
+```
 
 ## API 参考
 
