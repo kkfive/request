@@ -7,7 +7,8 @@ kk-request 是基于 ky 的**业务层封装**，不是完整 HTTP 客户端。*
 ## 做什么（封装层职责）
 - ✅ Token 注入 + 401 自动刷新重试（基于 `ky.retry()`）
 - ✅ 响应解析（`raw` / `body` / `data`）+ 业务错误 `BusinessError`
-- ✅ 生命周期回调（`onRequest` / `onResponse` / `onError` / `onUnauthorized`）
+- ✅ Standard Schema 响应校验（`strict` / `warn` / `off` 三态，零依赖透传 ky 的 `SchemaValidationError`）
+- ✅ 生命周期回调（`onRequest` / `onResponse` / `onError` / `onUnauthorized` / `onValidationError`）
 - ✅ SSE 流式请求
 - ✅ 透传 ky 原生错误类型与类型守卫
 
@@ -27,7 +28,7 @@ kk-request 是基于 ky 的**业务层封装**，不是完整 HTTP 客户端。*
 - 运行时依赖（**dependencies**，非 peer）：`ky ^2.0.2`、`qs`、`parse-sse`。
 - 本库硬依赖 ky **2.0** API：`ky.retry()` / `prefix`（取代旧 `prefixUrl`）/ state 对象 hook。
 - 环境：Node **≥ 22**、现代浏览器 / Deno / Cloudflare Workers；不支持 IE11、Node < 22。
-- 消费方做 `instanceof HTTPError` 须从 `@kkfive/request` 导入（避免与自身 ky 副本不一致）。
+- 消费方做 `instanceof HTTPError` / `SchemaValidationError` 须从 `@kkfive/request` 导入（避免与自身 ky 副本不一致）。
 
 详细架构见 [../references/architecture.md](../references/architecture.md)。
 

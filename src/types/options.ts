@@ -1,4 +1,4 @@
-import type { Options } from 'ky'
+import type { Options, StandardSchemaV1, StandardSchemaV1Issue } from 'ky'
 import type { BuiltInHooksConfig, ExtendedHooks } from './hooks'
 import type { ResponseParserConfig } from './response'
 
@@ -64,6 +64,10 @@ interface LifecycleCallbacks {
    * 401 未授权时回调
    */
   onUnauthorized?: () => void
+  /**
+   * schema 校验失败时回调（仅 `warn` 模式触发）。提供后取代默认的 `console.warn`。
+   */
+  onValidationError?: (issues: readonly StandardSchemaV1Issue[]) => void
 }
 
 /**
@@ -114,6 +118,25 @@ interface ExtendedOptions {
    * 扩展的 hooks 配置（高级控制）
    */
   extendedHooks?: ExtendedHooks
+  /**
+   * 响应数据校验 schema（Standard Schema，如 zod 3.24+ / valibot / arktype）。
+   * 传入后返回类型自动推导为 schema 的输出类型，优先于手动泛型 `<T>`。
+   *
+   * 校验对象随 `responseParser` 模式而定：`data` 模式校验提取后的 data、
+   * `body` 模式校验完整响应体；`raw` 模式不校验（会 `console.warn` 一次提示）。
+   */
+  schema?: StandardSchemaV1
+  /**
+   * schema 校验模式（仅在传入 `schema` 时有意义）。
+   * - `strict`（默认）：校验失败抛 `SchemaValidationError`
+   * - `warn`：校验失败不抛，调用 `onValidationError` 或 `console.warn`，降级返回未经 transform 的原始数据
+   * - `off`：不执行校验，直接返回数据
+   *
+   * 库不读取环境变量；如需按环境切换，请在调用处用打包器变量映射后传入，例如
+   * `schemaValidation: import.meta.env.PROD ? 'off' : 'strict'`。
+   * @default 'strict'
+   */
+  schemaValidation?: 'strict' | 'warn' | 'off'
 }
 
 /**

@@ -109,14 +109,25 @@ afterResponse:
 - `unwrap: true` - 使用实例配置的 `data` 模式
 - `unwrap: false` - 返回完整响应体
 
+### Schema 校验 (`src/client/request.ts`)
+
+**职责**：用 Standard Schema 校验响应数据，返回类型自动推导（不绑定具体校验库）。
+
+- **注入点**：`request()` 末尾、`responseParser` hook 之后、`raw` 提前返回之后——校验对象是 hook 规整后的 json（`data` 模式校验提取后的 data、`body` 模式校验完整响应体）。
+- **自跑 validate**：不复用 ky 的 `.json(schema)`（仅 strict 语义），改为 `schema['~standard'].validate(jsonValue)`，复用 ky 的 `SchemaValidationError`。
+- **三态** `schemaValidation`：`strict`（默认，抛 `SchemaValidationError`）/ `warn`（不抛，`onValidationError` 或 `console.warn`，降级返回未 transform 原值）/ `off`（不校验）。库不读 env，由调用处映射。
+- **类型**：`get/post/...` 泛型重载，传 `config.schema` 时返回 `StandardSchemaV1InferOutput<S>`，优先于手动 `<T>`。`raw`+schema 无法编译期排除（schema 在全局 config），运行时 warn 一次兜底。
+- 错误分层见 [../rules/error-model.md](../rules/error-model.md)。
+
 ### 错误处理 (`src/errors/business-error.ts` + ky 原生错误)
 
-错误分两层，互不混淆（分层规则见 [../rules/error-model.md](../rules/error-model.md)）：
+错误分三层，互不混淆（分层规则见 [../rules/error-model.md](../rules/error-model.md)）：
 
 - **业务错误 `BusinessError`**：HTTP 2xx 但业务 `code` 不符。携带 `code`（业务码）、`raw`（原始响应体）、`response`。
 - **传输层错误**：原样透传 ky 原生类型 —— `HTTPError`（非 2xx）、`NetworkError`、`TimeoutError`、`ForceRetryError`、`KyError`，均从本包重新导出，配合 `isHTTPError` 等守卫使用。
+- **结构错误 `SchemaValidationError`**（ky 原生，重导出）：`strict` 模式响应不符 schema 时抛，带 `issues`。**不触发 `onError`/`makeErrorMessage`**（catch 块对它直接抛出）。
 
-`Request.request()` 的 catch 块**不做归一/包装**，仅触发 `onError` 等生命周期回调后原样抛出。
+`Request.request()` 的 catch 块**不做归一/包装**，仅触发 `onError` 等生命周期回调后原样抛出（`SchemaValidationError` 除外，直接抛）。
 
 ## 数据流
 
@@ -133,7 +144,7 @@ ky 发送 HTTP 请求
   ↓
 执行 afterResponse hooks（unauthorized → responseParser）
   ↓
-触发 onResponse 回调 → 返回数据
+触发 onResponse 回调 → （传入 schema 时）按 schemaValidation 校验 → 返回数据
 ```
 
 ### 错误流程

@@ -61,5 +61,13 @@ export {
   isTimeoutError,
   KyError,
   NetworkError,
+  SchemaValidationError,
   TimeoutError,
+} from 'ky'
+
+// Standard Schema 类型（透传，供消费方标注 schema 与校验 issues；零运行时依赖）
+export type {
+  StandardSchemaV1,
+  StandardSchemaV1InferOutput,
+  StandardSchemaV1Issue,
 } from 'ky'

@@ -202,6 +202,56 @@ const data = await http.get('/api')
 const response = await http.get('/api', { unwrap: false })
 ```
 
+### Schema 校验
+
+传入 `schema`（[Standard Schema](https://github.com/standard-schema/standard-schema)，兼容 zod 3.24+ / valibot / arktype 或手写）即可校验响应数据，**返回类型自动从 schema 推导**，无需手动 `<T>`：
+
+```typescript
+import { z } from 'zod'
+
+const userSchema = z.object({ id: z.number(), name: z.string() })
+
+// user 类型自动推导为 { id: number, name: string }
+const user = await http.get('/users/1', { schema: userSchema })
+```
+
+校验对象随响应模式而定：`data` 模式校验提取后的 data、`body` 模式校验完整响应体；`raw` 模式不校验（传 schema 会告警一次）。校验顺序在业务码之后——先确认业务成功，再校验数据结构。
+
+#### 三态校验模式
+
+`schemaValidation` 控制校验行为，实例级配置、请求级可覆盖：
+
+| 模式 | 校验 | 失败行为 | 适用 |
+|------|------|----------|------|
+| `strict`（默认） | ✅ | 抛 `SchemaValidationError` | 开发 / 测试，尽早暴露 |
+| `warn` | ✅ | 不抛，调用 `onValidationError` 或 `console.warn`，降级返回原始数据 | 生产监控 schema 漂移但不中断业务 |
+| `off` | ❌ | 直接返回数据 | 完全信任后端 / 追求极致开销 |
+
+```typescript
+const http = createClient({
+  responseParser: { responseReturn: 'data', successCode: 0 },
+  // 库不读环境变量；由调用处用打包器变量映射，让 bundler 把模式固化为常量
+  schemaValidation: import.meta.env.PROD ? 'warn' : 'strict',
+  onValidationError: issues => reportToSentry(issues), // warn 模式失败上报（取代默认 console.warn）
+})
+```
+
+`SchemaValidationError` 属结构层错误（请求本身已成功），**不触发** `onError` / `makeErrorMessage`；从 `@kkfive/request` 导入以便 `instanceof` 判断（与 `HTTPError` 等一致）：
+
+```typescript
+import { SchemaValidationError } from '@kkfive/request'
+
+try {
+  const user = await http.get('/users/1', { schema: userSchema })
+}
+catch (error) {
+  if (error instanceof SchemaValidationError)
+    console.error(error.issues) // 校验失败的字段详情
+}
+```
+
+> 零运行时依赖：仅依赖 ky 透传的 `StandardSchemaV1` 类型接口，不绑定具体校验库。
+
 ### 生命周期回调
 
 ```typescript
@@ -407,8 +457,11 @@ function CreateUser() {
 | `getHeaders` | `() => Record<string, string>` | - | 动态获取额外 headers |
 | `onRequest` | `(method, url) => void` | - | 请求发送前回调 |
 | `onResponse` | `(method, url, status) => void` | - | 响应返回后回调 |
-| `onError` | `(error: Error, response?) => void` | - | 错误发生时回调（业务错误为 BusinessError，传输错误为 ky 原生类型） |
+| `onError` | `(error: Error, response?) => void` | - | 错误发生时回调（业务错误为 BusinessError，传输错误为 ky 原生类型；不含 SchemaValidationError） |
 | `onUnauthorized` | `() => void` | - | 401 未授权时回调 |
+| `schema` | `StandardSchemaV1` | - | 响应校验 schema，传入后返回类型自动推导（zod 3.24+ / valibot / …） |
+| `schemaValidation` | `'strict' \| 'warn' \| 'off'` | `'strict'` | schema 校验模式（见 [Schema 校验](#schema-校验)） |
+| `onValidationError` | `(issues) => void` | - | warn 模式校验失败回调（取代默认 console.warn） |
 
 #### AuthOptions
 
@@ -446,6 +499,9 @@ http.post<T>(url, data?, config?)
 http.put<T>(url, data?, config?)
 http.patch<T>(url, data?, config?)
 http.delete<T>(url, config?)
+
+// 传入 config.schema 时返回类型自动推导为 schema 输出类型（优先于手动 <T>）
+const user = await http.get('/users/1', { schema: userSchema }) // => 推导自 schema
 ```
 
 ### 请求级配置

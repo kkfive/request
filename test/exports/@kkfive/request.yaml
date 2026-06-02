@@ -18,6 +18,7 @@
   NetworkError: function
   paramsSerializerHook: function
   Request: function
+  SchemaValidationError: function
   sse: function
   SSEStream: function
   TimeoutError: function

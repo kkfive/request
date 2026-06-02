@@ -28,6 +28,7 @@
 | 选响应模式（raw/body/data） | [README → 响应解析](README.md#响应解析) |
 | 区分 BusinessError / 传输错误 | [README → 错误处理](README.md#错误处理) |
 | SSE 流式 | [README → SSE 流式请求](README.md#sse-流式请求) |
+| schema 校验响应（zod/valibot…） | [README → Schema 校验](README.md#schema-校验) · [`examples/index.ts`](examples/index.ts) |
 | 完整 API 全表 | [README → API 参考](README.md#api-参考) |
 | 可运行示例 | [`examples/index.ts`](examples/index.ts) |
 | 浓缩用法卡（外部消费 AI） | [`llms.txt`](llms.txt) |
