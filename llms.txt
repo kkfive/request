@@ -35,6 +35,7 @@ const created = await http.post<User>('/users', { name: 'kk' })
 
 ## 更多
 
-- 可运行示例：[./examples/index.ts](./examples/index.ts)
+- 可运行入口：[./examples/index.ts](./examples/index.ts)
+- 分主题示例：[basic](./examples/basic.ts) / [auth-refresh](./examples/auth-refresh.ts) / [response-modes](./examples/response-modes.ts) / [error-handling](./examples/error-handling.ts) / [sse](./examples/sse.ts) / [schema-validation](./examples/schema-validation.ts)
 - 完整文档与 API 全表：[./README.md](./README.md)
 - 类型与 `@example`：随包 `.d.ts`，在编辑器调用处即可见。

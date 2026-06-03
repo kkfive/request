@@ -96,7 +96,7 @@ const users = await http.get<User[]>('/users')
 const user = await http.post<User>('/users', { name: 'test' })
 ```
 
-> 💡 完整的可运行示例（含 token 刷新、错误处理、SSE）见 [`examples/index.ts`](./examples/index.ts)。
+> 分主题示例见 [`examples/`](./examples/)；可运行入口为 [`examples/index.ts`](./examples/index.ts)。
 
 ## 功能特性
 
