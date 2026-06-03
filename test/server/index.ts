@@ -224,11 +224,13 @@ export function startServer(): Promise<string> {
         }
         catch {}
 
-        const chunks = parsed.chunks || [
-          { choices: [{ delta: { content: 'Hello' } }] },
-          { choices: [{ delta: { content: ' world' } }] },
-          { choices: [{ delta: { content: '!' } }] },
-        ]
+        const chunks = (url.searchParams.has('echoRequest') || parsed.echoRequest)
+          ? [{ method, body: body ? parsed : null }]
+          : parsed.chunks || [
+            { choices: [{ delta: { content: 'Hello' } }] },
+            { choices: [{ delta: { content: ' world' } }] },
+            { choices: [{ delta: { content: '!' } }] },
+          ]
 
         res.setHeader('Content-Type', 'text/event-stream')
         res.setHeader('Cache-Control', 'no-cache')

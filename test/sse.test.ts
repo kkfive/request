@@ -253,7 +253,8 @@ describe('sse 流式请求', () => {
       for await (const event of stream) {
         events.push(event)
       }
-      expect(events.length).toBeGreaterThan(0)
+      expect(events).toHaveLength(3)
+      expect(events[0].data.choices[0].delta.content).toBe('Hello')
     })
 
     it('prefix + 无斜杠 URL 应正常拼接', async () => {
@@ -264,35 +265,41 @@ describe('sse 流式请求', () => {
       for await (const event of stream) {
         events.push(event)
       }
-      expect(events.length).toBeGreaterThan(0)
+      expect(events).toHaveLength(3)
+      expect(events[0].data.choices[0].delta.content).toBe('Hello')
     })
   })
 
   describe('自定义请求体', () => {
     it('应发送 JSON body', async () => {
       const client = new Request({ prefix: baseUrl })
-      const stream = createSSEStream(client.raw, '/sse/chat', {
+      const body = {
+        echoRequest: true,
         model: 'gpt-4',
         messages: [{ role: 'user', content: 'Hi' }],
         stream: true,
-      })
+      }
+      const stream = createSSEStream(client.raw, '/sse/chat', body)
 
       const events: any[] = []
       for await (const event of stream) {
         events.push(event)
       }
-      expect(events.length).toBeGreaterThan(0)
+      expect(events).toHaveLength(1)
+      expect(events[0].data.method).toBe('POST')
+      expect(events[0].data.body).toEqual(body)
     })
 
     it('应支持自定义 method', async () => {
       const client = new Request({ prefix: baseUrl })
-      const stream = createSSEStream(client.raw, '/sse/chat', undefined, { method: 'GET' })
+      const stream = createSSEStream(client.raw, '/sse/chat?echoRequest=1', undefined, { method: 'GET' })
 
       const events: any[] = []
       for await (const event of stream) {
         events.push(event)
       }
-      expect(events.length).toBeGreaterThan(0)
+      expect(events).toHaveLength(1)
+      expect(events[0].data).toEqual({ method: 'GET', body: null })
     })
   })
 
