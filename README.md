@@ -271,17 +271,53 @@ const http = createClient({
 })
 ```
 
-### FormData 上传
+### 文件上传
 
-自动检测 FormData 并正确处理 Content-Type。
+#### FormData 上传
+
+自动检测 FormData 并正确处理 Content-Type。上传 `FormData` 时不要手动设置 `Content-Type`，因为 `multipart/form-data` 必须携带运行时生成的 `boundary`；本库会移除实例级、请求级或 `getHeaders` 注入的 `Content-Type`，让浏览器 / fetch 自动生成正确值。
 
 ```typescript
 const formData = new FormData()
 formData.append('file', file)
+formData.append('filename', file.name)
 
 // 自动移除 Content-Type，让浏览器设置 multipart/form-data
 await http.post('/upload', formData)
 ```
+
+#### 直接上传二进制
+
+如果后端要求请求体就是单个文件，而不是 `multipart/form-data`，可以直接传 `File` / `Blob` / `ArrayBuffer`，并按后端约定设置 `Content-Type`。
+
+```typescript
+await http.request('/upload/raw', {
+  method: 'POST',
+  body: file,
+  headers: {
+    'Content-Type': file.type || 'application/octet-stream',
+  },
+})
+```
+
+常见选择：
+- 表单上传、多字段上传：使用 `FormData`，不要设置 `Content-Type`。
+- 单文件原始 body：使用文件 MIME，如 `image/png`，或兜底 `application/octet-stream`。
+- 后端要求签名直传、对象存储 PUT：严格使用服务端签名约定的 `Content-Type`。
+
+#### 上传进度
+
+本库不再封装一层进度 API，直接透传 ky 原生 `onUploadProgress`。该能力依赖 request streams；在不支持的浏览器 / 运行时里回调可能不会触发。
+
+```typescript
+await http.post('/upload', formData, {
+  onUploadProgress: (progress) => {
+    console.log(progress.percent, progress.transferredBytes, progress.totalBytes)
+  },
+})
+```
+
+如果业务必须兼容所有浏览器并稳定显示上传进度，可在该上传入口使用 `XMLHttpRequest` 实现；其他接口仍继续使用 kk-request。更多示例见 [`examples/upload.ts`](./examples/upload.ts)。
 
 ### 请求取消
 
@@ -452,6 +488,7 @@ function CreateUser() {
 | `prefix` | `string` | - | 请求 URL 前缀（ky 2.0，取代旧的 `prefixUrl`） |
 | `timeout` | `number` | `10000` | 超时时间（毫秒） |
 | `headers` | `Record<string, string>` | - | 请求头 |
+| `onUploadProgress` | `(progress, chunk) => void` | - | 上传进度回调（ky 原生能力，依赖运行时支持） |
 | `responseParser` | `ResponseParserOptions` | - | 响应解析配置 |
 | `auth` | `AuthOptions` | - | 认证配置 |
 | `getHeaders` | `() => Record<string, string>` | - | 动态获取额外 headers |
@@ -513,6 +550,7 @@ const user = await http.get('/users/1', { schema: userSchema }) // => 推导自 
 | `signal` | `AbortSignal` | 取消信号 |
 | `params` | `Record<string, any>` | URL 查询参数 |
 | `paramsSerializer` | `'brackets' \| 'comma' \| 'indices' \| 'repeat'` | 参数序列化方式 |
+| `onUploadProgress` | `(progress, chunk) => void` | 上传进度回调（ky 原生能力） |
 
 ## 依赖
 

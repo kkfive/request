@@ -16,7 +16,7 @@ kk-request 是基于 ky 的**业务层封装**，不是完整 HTTP 客户端。*
 - ❌ 缓存 → @tanstack/query
 - ❌ 通用重试 → ky 的 `retry` 选项 / @tanstack/query（**401 刷新重试是内置能力，属唯一例外**）
 - ❌ 去重 → @tanstack/query
-- ❌ 进度监听 → 用 `raw` getter 访问底层 ky 实例自行处理流
+- ❌ 统一进度抽象 → 上传进度优先透传 ky 原生 `onUploadProgress`；需要特殊兼容时用 `raw` getter 或业务侧 `XMLHttpRequest`
 
 > 收到「加缓存 / 加去重 / 加通用重试」类需求时：**不在本库实现**，引导到上述工具。
 
