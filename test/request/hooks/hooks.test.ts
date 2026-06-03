@@ -1,4 +1,4 @@
-import type { EchoData } from '../../types'
+import type { EchoData, FormDataResponse } from '../../types'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { Request, to } from '../../../src'
 
@@ -159,6 +159,66 @@ describe('request hooks 管理', () => {
       const result = await request.get<string>('/success')
       expect(result).toEqual(expect.any(String))
       expect(result).not.toHaveLength(0)
+    })
+
+    it('formData 请求应移除实例级 Content-Type，让 fetch 自动设置 boundary', async () => {
+      const request = new Request({
+        prefix: baseUrl,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      const formData = new FormData()
+      formData.append('file', new Blob(['content']), 'test.txt')
+
+      const result = await request.post<FormDataResponse>('/formdata', formData)
+
+      expect(result.success).toBe(true)
+      expect(result.data.isMultipart).toBe(true)
+      expect(result.data.contentType).toContain('multipart/form-data')
+      expect(result.data.contentType).toContain('boundary=')
+      expect(result.data.contentType).not.toContain('application/json')
+    })
+
+    it('formData 请求应移除请求级 Content-Type', async () => {
+      const request = new Request({
+        prefix: baseUrl,
+      })
+
+      const formData = new FormData()
+      formData.append('name', 'avatar')
+
+      const result = await request.post<FormDataResponse>('/formdata', formData, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      expect(result.success).toBe(true)
+      expect(result.data.isMultipart).toBe(true)
+      expect(result.data.contentType).toContain('boundary=')
+      expect(result.data.contentType).not.toContain('application/json')
+    })
+
+    it('formData 请求应移除 getHeaders 注入的 Content-Type', async () => {
+      const request = new Request({
+        prefix: baseUrl,
+        getHeaders: () => ({
+          'Content-Type': 'application/json',
+          'X-Custom-Header': 'upload',
+        }),
+      })
+
+      const formData = new FormData()
+      formData.append('name', 'avatar')
+
+      const result = await request.post<FormDataResponse>('/formdata', formData)
+
+      expect(result.success).toBe(true)
+      expect(result.data.isMultipart).toBe(true)
+      expect(result.data.contentType).toContain('boundary=')
+      expect(result.data.contentType).not.toContain('application/json')
     })
 
     it('features.enableUnauthorizedHandler=false 应禁用 unauthorized hook', async () => {

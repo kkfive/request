@@ -52,6 +52,7 @@ export interface EchoData {
  */
 export interface FormDataData {
   isMultipart: boolean
+  contentType: string
   fields: Record<string, string>
 }
 
