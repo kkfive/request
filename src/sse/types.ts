@@ -40,10 +40,6 @@ interface SSEConfig {
    */
   method?: string
   /**
-   * 请求体，会自动 JSON 序列化
-   */
-  body?: unknown
-  /**
    * 额外的请求 headers
    */
   headers?: Record<string, string>
@@ -69,6 +65,13 @@ interface SSEConfig {
    * 未指定时继承客户端的 timeout 配置
    */
   timeout?: number
+}
+
+type SSERequestConfig = SSEConfig & {
+  /**
+   * 内部请求体，由 `client.sse(url, data, config)` 的第二个参数传入。
+   */
+  body?: unknown
 }
 
 /**
@@ -137,5 +140,6 @@ export type {
   SSEEvent,
   SSEEventHandler,
   SSEFromResponseOptions,
+  SSERequestConfig,
   SSEStream,
 }

@@ -4,7 +4,6 @@
   createClient: function
   createContentTypeHook: function
   createResponseParserHook: function
-  createSSEStream: function
   createSSEStreamFromResponse: function
   createUnauthorizedHook: function
   ForceRetryError: function
@@ -19,7 +18,6 @@
   paramsSerializerHook: function
   Request: function
   SchemaValidationError: function
-  sse: function
   SSEStream: function
   TimeoutError: function
   to: function

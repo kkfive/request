@@ -1,8 +1,10 @@
 import type { KyInstance, StandardSchemaV1, StandardSchemaV1InferOutput } from 'ky'
+import type { SSEStream as ISSEStream, SSEConfig } from '../sse/types'
 import type { RequestConfig } from '../types'
 import ky, { isHTTPError, SchemaValidationError } from 'ky'
 import { BusinessError } from '../errors'
 import { resolveHooks } from '../hooks'
+import { createSSEStreamForClient } from '../sse/stream'
 import { merge } from '../utils'
 
 /**
@@ -112,6 +114,14 @@ class Request {
       return this.request(url, { ...config, body: data, method: 'PUT' })
     }
     return this.request(url, { ...config, json: data, method: 'PUT' })
+  }
+
+  /**
+   * 发起 SSE 流式请求。内部会强制使用 raw Response，避免实例级 responseParser
+   * 解析 `text/event-stream`，同时保留 auth / getHeaders / 401 refresh hooks。
+   */
+  public sse<T = unknown>(url: string, data?: unknown, config?: SSEConfig): ISSEStream<T> {
+    return createSSEStreamForClient<T>(this.instance, url, data, config)
   }
 
   /**

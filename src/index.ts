@@ -14,7 +14,7 @@ export {
 } from './hooks'
 
 // SSE 流式请求
-export { createSSEStream, createSSEStreamFromResponse, sse, SSEStream } from './sse'
+export { createSSEStreamFromResponse, SSEStream } from './sse'
 
 // SSE 类型
 export type {

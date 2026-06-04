@@ -30,7 +30,7 @@ const created = await http.post<User>('/users', { name: 'kk' })
 - 认证：`auth.getToken`；401 自动刷新：`auth.refreshToken.{ getRefreshToken, refresh, onRefreshSuccess, onRefreshFail }`（并发去重，只刷新一次）。
 - 错误两层：业务失败抛 `BusinessError`（`code`/`raw`/`response`）；传输失败为 ky 原生 `HTTPError`/`NetworkError`/`TimeoutError`（用 `isHTTPError` 等守卫，均从本包导出）。先判 `instanceof BusinessError` 再用 ky 守卫。
 - 上传：`FormData` 会自动移除已有 `Content-Type`，让 fetch 生成 multipart boundary；直接上传 `File`/`Blob` 时按后端约定设置 MIME 或 `application/octet-stream`。上传进度用 ky 原生 `onUploadProgress`，见 [upload 示例](./examples/upload.ts)。
-- SSE：`createSSEStream(client.raw, url, body, config)`，支持 `for await` 与 `.on('data'|'error'|'close')` 两种消费。
+- SSE：`client.sse(url, body, config)`，支持 `for await` 与 `.on('data'|'error'|'close')` 两种消费；已有 `Response` 解析使用 `createSSEStreamFromResponse(response, options)`。
 - 生命周期：`onRequest` / `onResponse` / `onError` / `onUnauthorized`。
 - 底层 ky 实例：`client.raw`（下载文件 / 纯文本 / 自定义请求）。
 

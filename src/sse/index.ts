@@ -1,1 +1,1 @@
-export { createSSEStream, createSSEStreamFromResponse, sse, SSEStream } from './stream'
+export { createSSEStreamFromResponse, SSEStream } from './stream'
