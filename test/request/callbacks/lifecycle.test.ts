@@ -1,8 +1,23 @@
-import type { HTTPError } from '../../../src'
+import type { HTTPError, StandardSchemaV1 } from '../../../src'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import { isHTTPError, Request, to } from '../../../src'
+import { BusinessError, isHTTPError, Request, SchemaValidationError, to } from '../../../src'
 
 import { getBaseUrl } from '../helpers'
+
+function createTracingSchema(calls: string[], valid = true): StandardSchemaV1<unknown, unknown> {
+  return {
+    '~standard': {
+      version: 1,
+      vendor: 'test',
+      validate: (value) => {
+        calls.push('schema')
+        return valid
+          ? { value }
+          : { issues: [{ message: 'invalid' }] }
+      },
+    },
+  }
+}
 
 describe('request 生命周期回调', () => {
   let baseUrl: string
@@ -181,6 +196,132 @@ describe('request 生命周期回调', () => {
 
       await to(request.get('/error/http/401'))
       expect(onUnauthorizedFn).toHaveBeenCalledTimes(1)
+    })
+
+    it('成功请求顺序应为 onRequest -> hooks -> onResponse -> schema -> onValidationError', async () => {
+      const calls: string[] = []
+      const request = new Request({
+        prefix: baseUrl,
+        onRequest: () => calls.push('onRequest'),
+        onResponse: () => calls.push('onResponse'),
+        onValidationError: () => calls.push('onValidationError'),
+        responseParser: {
+          responseReturn: 'data',
+          codeField: 'success',
+          dataField: 'data',
+          successCode: true,
+        },
+        schemaValidation: 'warn',
+        extendedHooks: {
+          beforeRequest: {
+            prepend: [() => {
+              calls.push('beforeRequest.prepend')
+            }],
+            append: [() => {
+              calls.push('beforeRequest.append')
+            }],
+          },
+          afterResponse: {
+            prepend: [({ response }) => {
+              calls.push('afterResponse.prepend')
+              return response
+            }],
+            append: [({ response }) => {
+              calls.push('afterResponse.append')
+              return response
+            }],
+          },
+        },
+      })
+
+      await request.get('/success', {
+        schema: createTracingSchema(calls, false),
+      })
+
+      expect(calls).toEqual([
+        'onRequest',
+        'beforeRequest.prepend',
+        'beforeRequest.append',
+        'afterResponse.prepend',
+        'afterResponse.append',
+        'onResponse',
+        'schema',
+        'onValidationError',
+      ])
+    })
+
+    it('业务错误顺序应为 onRequest -> afterResponse prepend -> onResponse -> onError', async () => {
+      const calls: string[] = []
+      const request = new Request({
+        prefix: baseUrl,
+        onRequest: () => calls.push('onRequest'),
+        onResponse: () => calls.push('onResponse'),
+        onError: () => calls.push('onError'),
+        responseParser: {
+          responseReturn: 'data',
+          codeField: 'success',
+          dataField: 'data',
+          successCode: true,
+          errorCodeField: 'errorCode',
+          errorMessageField: 'errorMessage',
+        },
+        extendedHooks: {
+          afterResponse: {
+            prepend: [({ response }) => {
+              calls.push('afterResponse.prepend')
+              return response
+            }],
+            append: [({ response }) => {
+              calls.push('afterResponse.append')
+              return response
+            }],
+          },
+        },
+      })
+
+      const [error] = await to(request.get('/error/business/500'))
+
+      expect(error).toBeInstanceOf(BusinessError)
+      expect(calls).toEqual([
+        'onRequest',
+        'afterResponse.prepend',
+        'onResponse',
+        'onError',
+      ])
+    })
+
+    it('strict schema 错误应发生在 onResponse 之后且不触发 onError', async () => {
+      const calls: string[] = []
+      const request = new Request({
+        prefix: baseUrl,
+        onResponse: () => calls.push('onResponse'),
+        onError: () => calls.push('onError'),
+        responseParser: {
+          responseReturn: 'data',
+          codeField: 'success',
+          dataField: 'data',
+          successCode: true,
+        },
+        extendedHooks: {
+          afterResponse: {
+            append: [({ response }) => {
+              calls.push('afterResponse.append')
+              return response
+            }],
+          },
+        },
+      })
+
+      const [error] = await to(request.get('/success', {
+        schema: createTracingSchema(calls, false),
+      }))
+
+      expect(error).toBeInstanceOf(SchemaValidationError)
+      expect(calls).toEqual([
+        'afterResponse.append',
+        'onResponse',
+        'schema',
+      ])
     })
   })
 

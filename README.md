@@ -271,6 +271,62 @@ const http = createClient({
 })
 ```
 
+### Hook 与生命周期顺序
+
+`extendedHooks` 用于插入 ky hooks；`onRequest` / `onResponse` / `onError` / `onUnauthorized` / `onValidationError` 是生命周期回调，不在 ky hook 队列中。
+
+请求成功时的整体顺序：
+
+```text
+onRequest
+→ beforeRequest hooks
+→ fetch
+→ afterResponse hooks
+→ onResponse
+→ schema validation
+→ return
+```
+
+错误路径：
+
+```text
+hook / fetch / responseParser 抛错
+→ catch
+→ onResponse（仅当错误携带 response）
+→ onError / makeErrorMessage
+→ 原样抛出
+```
+
+`SchemaValidationError` 属结构层错误：它发生在 `onResponse` 之后，但不触发 `onError` / `makeErrorMessage`。`warn` 模式下校验失败不抛错，会触发 `onValidationError` 或默认 `console.warn`。
+
+内置 hooks 的相对顺序固定：
+
+```text
+beforeRequest:
+  extendedHooks.beforeRequest.prepend
+  → paramsSerializer
+  → auth
+  → contentType
+  → extendedHooks.beforeRequest.append
+  → hooks.beforeRequest（兼容旧配置）
+
+afterResponse:
+  extendedHooks.afterResponse.prepend
+  → unauthorized
+  → responseParser
+  → extendedHooks.afterResponse.append
+  → hooks.afterResponse（兼容旧配置）
+```
+
+用户可以通过 `prepend` / `append` 控制自定义 hook 在内置 hooks 前后执行，也可以用 `features` / `extendedHooks.control.disable` 禁用内置 hook，或用 `extendedHooks.control.replace` 替换某个内置 hook 的实现。替换后的 hook 仍占用原来的位置；不能通过配置任意重排 `paramsSerializer` / `auth` / `contentType` 或 `unauthorized` / `responseParser` 的相对顺序。
+
+这个顺序会影响行为：
+
+- `afterResponse.prepend` 看到原始响应；如果读取 body，必须使用 `response.clone()`。
+- `afterResponse.append` 默认看到 `responseParser` 处理后的响应。
+- `unauthorized` 必须在 `responseParser` 之前，401 才能先刷新 token 并通过 `ky.retry()` 重发。
+- 401 重试请求由 `ky.retry()` 发起，重试时不会重新执行 `beforeRequest`；刷新后的 token 会由内置 `unauthorized` hook 显式写入重试请求。
+
 ### 文件上传
 
 #### FormData 上传
