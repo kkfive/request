@@ -27,7 +27,8 @@ kk-request 是基于 ky 的**业务层封装**，不是完整 HTTP 客户端。*
 ## 依赖与环境（硬约束）
 - 运行时依赖（**dependencies**，非 peer）：`ky ^2.0.2`、`qs`、`parse-sse`。
 - 本库硬依赖 ky **2.0** API：`ky.retry()` / `prefix`（取代旧 `prefixUrl`）/ state 对象 hook。
-- 环境：Node **≥ 22**、现代浏览器 / Deno / Cloudflare Workers；不支持 IE11、Node < 22。
+- 消费方运行环境：Node.js 运行时 **≥ 22**（跟随 `ky` 2.0 的 `engines.node`）；非 Node.js 运行时支持现代浏览器 / Deno / Cloudflare Workers；不支持 IE11、Node.js < 22 的 Node.js 运行时。
+- 库开发 / 发布环境：使用 Node.js **≥ 22**；本仓库当前通过 `mise.toml` 固定为 Node.js 24。
 - 消费方做 `instanceof HTTPError` / `SchemaValidationError` 须从 `@kkfive/request` 导入（避免与自身 ky 副本不一致）。
 
 详细架构见 [../references/architecture.md](../references/architecture.md)。

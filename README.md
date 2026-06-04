@@ -17,6 +17,37 @@
 - 缓存、重试、去重 → [@tanstack/query](https://tanstack.com/query)
 - HTTP 请求、超时、取消 → [ky](https://github.com/sindresorhus/ky)
 
+## 兼容性
+
+消费方运行环境：
+
+- Node.js 运行时：Node.js >= 22（跟随 `ky` 2.0 的 `engines.node`）
+- 非 Node.js 运行时：现代浏览器、Deno、Cloudflare Workers
+- 不支持：Node.js < 22 的 Node.js 运行时、IE11
+
+库开发 / 发布环境：
+
+- 使用 Node.js >= 22；本仓库当前通过 `mise.toml` 固定为 Node.js 24
+
+`ky`、`qs`、`parse-sse` 已作为直接依赖随包安装；消费方处理 `HTTPError` / `SchemaValidationError` 时建议从 `@kkfive/request` 导入对应错误类或类型守卫，避免与项目内其他 `ky` 副本混用。
+
+## 适合与不适合
+
+适合使用 kk-request 的场景：
+
+- 已经选择 fetch / ky 体系，但需要业务层请求封装
+- API 返回 `{ code, data, message }` 等业务响应，需要统一解包与 `BusinessError`
+- 需要 token 注入、401 后 refresh token、并发 401 只刷新一次
+- 需要 Standard Schema 响应校验或 SSE 流式请求
+- 希望与 @tanstack/query 等上层请求状态框架组合使用
+
+不适合使用 kk-request 的场景：
+
+- 只需要底层 HTTP client，没有业务 code / token refresh / 解包需求
+- 需要内置缓存、请求去重、完整请求状态管理
+- Node.js 运行时必须支持 Node.js < 22，或浏览器必须支持 IE11
+- 已经深度依赖 axios 拦截器生态且没有迁移 fetch / ky 的计划
+
 ## 两种使用方式
 
 ### 1. 简单项目直接使用
@@ -66,6 +97,16 @@ const { data } = useQuery({
 
 这些功能由专业工具处理，效果更好，也避免了功能重复和职责混乱。
 
+## 同类产品选择
+
+| 场景 | 推荐选择 |
+|------|----------|
+| 需要通用 HTTP client，生态优先 | axios |
+| 需要轻量 fetch 封装，自己处理业务层逻辑 | ky |
+| Nuxt / unjs 生态或跨运行时通用 fetch | ofetch |
+| 已经使用 axios，只需要 refresh token 拦截 | axios-auth-refresh |
+| 需要 ky 体系下的业务响应解包、token refresh、schema 校验、SSE | @kkfive/request |
+
 ## 安装
 
 ```bash
@@ -73,6 +114,14 @@ pnpm add @kkfive/request
 ```
 
 > ky / qs / parse-sse 已作为直接依赖随包安装，无需手动安装。
+
+## 模块格式
+
+@kkfive/request 是 ESM-only 包：
+
+- ESM / TypeScript：`import { createClient } from '@kkfive/request'`
+- CommonJS 项目：请使用 dynamic `import('@kkfive/request')`，或迁移到 ESM
+- 包入口只发布 `dist/index.mjs` 与 `dist/index.d.mts`，不提供 `require()` / `dist/index.cjs` 入口
 
 ## 快速开始
 
@@ -405,7 +454,7 @@ const text = await http.raw.get('/markdown').text()
 #### 高层 API：一步完成请求 + 消费
 
 ```typescript
-import { createClient, createSSEStream } from '@kkfive/request'
+import { createClient } from '@kkfive/request'
 
 const client = createClient({
   prefix: 'https://api.openai.com/v1',
@@ -413,7 +462,7 @@ const client = createClient({
 })
 
 // Async iteration 模式
-const stream = createSSEStream(client.raw, '/chat/completions', {
+const stream = client.sse('/chat/completions', {
   model: 'gpt-4',
   messages: [{ role: 'user', content: 'Hello' }],
   stream: true,
@@ -428,7 +477,7 @@ for await (const event of stream) {
 #### Emitter 模式：多监听器
 
 ```typescript
-const stream = createSSEStream(client.raw, '/chat/completions', body)
+const stream = client.sse('/chat/completions', body)
 
 stream
   .on('data', (event) => {
@@ -446,16 +495,19 @@ await stream.done
 
 #### 底层 API：接收已有 Response
 
-用于需要自定义请求参数的场景。
+高级 API，用于已经拿到 `Response` 的场景，例如自行 `fetch`、第三方 SDK 返回 `Response`，或测试 fixture。发起 SSE 请求优先使用 `client.sse()`。
 
 ```typescript
 import { createSSEStreamFromResponse } from '@kkfive/request'
 
-// 自定义请求参数
-const response = await client.raw('sse/chat', {
+const response = await fetch('/sse/chat', {
   method: 'POST',
-  headers: { 'X-Custom': 'value' },
-  json: { messages },
+  headers: {
+    'Accept': 'text/event-stream',
+    'Content-Type': 'application/json',
+    'X-Custom': 'value',
+  },
+  body: JSON.stringify({ messages }),
 })
 
 const stream = createSSEStreamFromResponse(response)
@@ -475,7 +527,6 @@ for await (const event of stream) {
 | `timeout` | `number` | - | 超时时间（ms） |
 | `method` | `string` | `'POST'` | HTTP 方法 |
 | `headers` | `Record<string, string>` | - | 额外 headers |
-| `body` | `unknown` | - | 请求体 |
 
 ## 配合 @tanstack/query
 
@@ -613,6 +664,33 @@ const user = await http.get('/users/1', { schema: userSchema }) // => 推导自 
 - [ky](https://github.com/sindresorhus/ky) - HTTP 客户端
 - [qs](https://github.com/ljharb/qs) - 查询字符串解析
 - [parse-sse](https://github.com/sindresorhus/parse-sse) - SSE 流解析
+
+## 发布验证
+
+发布前执行：
+
+```bash
+pnpm verify
+```
+
+该命令会依次运行类型检查、lint、测试、覆盖率、构建和 npm tarball smoke test。tarball smoke test 会验证打包内容，并在临时项目中检查 ESM 和 TypeScript 类型导入。
+
+## 发布流程
+
+本项目通过 GitHub Actions 发布：推送 `v*` tag 后，`.github/workflows/release.yml` 会生成 GitHub Release notes 并发布 npm 包。
+
+`CHANGELOG.md` 不在 tag workflow 中回推，避免 tag 与仓库提交不一致。发布前如需更新本地 changelog：
+
+```bash
+pnpm changelog
+```
+
+如需在本地准备版本号、tag 与 changelog：
+
+```bash
+pnpm release:prepare
+git push --follow-tags
+```
 
 ## License
 
