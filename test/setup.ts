@@ -1,4 +1,4 @@
-import { afterAll, beforeAll } from 'vitest'
+import { afterAll, afterEach, beforeAll, vi } from 'vitest'
 import { startServer, stopServer } from './server'
 
 declare global {
@@ -9,6 +9,10 @@ declare global {
 beforeAll(async () => {
   const serverUrl = await startServer()
   globalThis.__TEST_SERVER_URL__ = serverUrl
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })
 
 afterAll(async () => {

@@ -17,6 +17,37 @@
 - 缓存、重试、去重 → [@tanstack/query](https://tanstack.com/query)
 - HTTP 请求、超时、取消 → [ky](https://github.com/sindresorhus/ky)
 
+## 兼容性
+
+消费方运行环境：
+
+- Node.js 运行时：Node.js >= 22（跟随 `ky` 2.0 的 `engines.node`）
+- 非 Node.js 运行时：现代浏览器、Deno、Cloudflare Workers
+- 不支持：Node.js < 22 的 Node.js 运行时、IE11
+
+库开发 / 发布环境：
+
+- 使用 Node.js >= 22；本仓库当前通过 `mise.toml` 固定为 Node.js 24
+
+`ky`、`qs`、`parse-sse` 已作为直接依赖随包安装；消费方处理 `HTTPError` / `SchemaValidationError` 时建议从 `@kkfive/request` 导入对应错误类或类型守卫，避免与项目内其他 `ky` 副本混用。
+
+## 适合与不适合
+
+适合使用 kk-request 的场景：
+
+- 已经选择 fetch / ky 体系，但需要业务层请求封装
+- API 返回 `{ code, data, message }` 等业务响应，需要统一解包与 `BusinessError`
+- 需要 token 注入、401 后 refresh token、并发 401 只刷新一次
+- 需要 Standard Schema 响应校验或 SSE 流式请求
+- 希望与 @tanstack/query 等上层请求状态框架组合使用
+
+不适合使用 kk-request 的场景：
+
+- 只需要底层 HTTP client，没有业务 code / token refresh / 解包需求
+- 需要内置缓存、请求去重、完整请求状态管理
+- Node.js 运行时必须支持 Node.js < 22，或浏览器必须支持 IE11
+- 已经深度依赖 axios 拦截器生态且没有迁移 fetch / ky 的计划
+
 ## 两种使用方式
 
 ### 1. 简单项目直接使用
@@ -66,6 +97,16 @@ const { data } = useQuery({
 
 这些功能由专业工具处理，效果更好，也避免了功能重复和职责混乱。
 
+## 同类产品选择
+
+| 场景 | 推荐选择 |
+|------|----------|
+| 需要通用 HTTP client，生态优先 | axios |
+| 需要轻量 fetch 封装，自己处理业务层逻辑 | ky |
+| Nuxt / unjs 生态或跨运行时通用 fetch | ofetch |
+| 已经使用 axios，只需要 refresh token 拦截 | axios-auth-refresh |
+| 需要 ky 体系下的业务响应解包、token refresh、schema 校验、SSE | @kkfive/request |
+
 ## 安装
 
 ```bash
@@ -73,6 +114,14 @@ pnpm add @kkfive/request
 ```
 
 > ky / qs / parse-sse 已作为直接依赖随包安装，无需手动安装。
+
+## 模块格式
+
+@kkfive/request 是 ESM-only 包：
+
+- ESM / TypeScript：`import { createClient } from '@kkfive/request'`
+- CommonJS 项目：请使用 dynamic `import('@kkfive/request')`，或迁移到 ESM
+- 包入口只发布 `dist/index.mjs` 与 `dist/index.d.mts`，不提供 `require()` / `dist/index.cjs` 入口
 
 ## 快速开始
 
@@ -96,7 +145,7 @@ const users = await http.get<User[]>('/users')
 const user = await http.post<User>('/users', { name: 'test' })
 ```
 
-> 💡 完整的可运行示例（含 token 刷新、错误处理、SSE）见 [`examples/index.ts`](./examples/index.ts)。
+> 分主题示例见 [`examples/`](./examples/)；可运行入口为 [`examples/index.ts`](./examples/index.ts)。
 
 ## 功能特性
 
@@ -271,17 +320,109 @@ const http = createClient({
 })
 ```
 
-### FormData 上传
+### Hook 与生命周期顺序
 
-自动检测 FormData 并正确处理 Content-Type。
+`extendedHooks` 用于插入 ky hooks；`onRequest` / `onResponse` / `onError` / `onUnauthorized` / `onValidationError` 是生命周期回调，不在 ky hook 队列中。
+
+请求成功时的整体顺序：
+
+```text
+onRequest
+→ beforeRequest hooks
+→ fetch
+→ afterResponse hooks
+→ onResponse
+→ schema validation
+→ return
+```
+
+错误路径：
+
+```text
+hook / fetch / responseParser 抛错
+→ catch
+→ onResponse（仅当错误携带 response）
+→ onError / makeErrorMessage
+→ 原样抛出
+```
+
+`SchemaValidationError` 属结构层错误：它发生在 `onResponse` 之后，但不触发 `onError` / `makeErrorMessage`。`warn` 模式下校验失败不抛错，会触发 `onValidationError` 或默认 `console.warn`。
+
+内置 hooks 的相对顺序固定：
+
+```text
+beforeRequest:
+  extendedHooks.beforeRequest.prepend
+  → paramsSerializer
+  → auth
+  → contentType
+  → extendedHooks.beforeRequest.append
+  → hooks.beforeRequest（兼容旧配置）
+
+afterResponse:
+  extendedHooks.afterResponse.prepend
+  → unauthorized
+  → responseParser
+  → extendedHooks.afterResponse.append
+  → hooks.afterResponse（兼容旧配置）
+```
+
+用户可以通过 `prepend` / `append` 控制自定义 hook 在内置 hooks 前后执行，也可以用 `features` / `extendedHooks.control.disable` 禁用内置 hook，或用 `extendedHooks.control.replace` 替换某个内置 hook 的实现。替换后的 hook 仍占用原来的位置；不能通过配置任意重排 `paramsSerializer` / `auth` / `contentType` 或 `unauthorized` / `responseParser` 的相对顺序。
+
+这个顺序会影响行为：
+
+- `afterResponse.prepend` 看到原始响应；如果读取 body，必须使用 `response.clone()`。
+- `afterResponse.append` 默认看到 `responseParser` 处理后的响应。
+- `unauthorized` 必须在 `responseParser` 之前，401 才能先刷新 token 并通过 `ky.retry()` 重发。
+- 401 重试请求由 `ky.retry()` 发起，重试时不会重新执行 `beforeRequest`；刷新后的 token 会由内置 `unauthorized` hook 显式写入重试请求。
+
+### 文件上传
+
+#### FormData 上传
+
+自动检测 FormData 并正确处理 Content-Type。上传 `FormData` 时不要手动设置 `Content-Type`，因为 `multipart/form-data` 必须携带运行时生成的 `boundary`；本库会移除实例级、请求级或 `getHeaders` 注入的 `Content-Type`，让浏览器 / fetch 自动生成正确值。
 
 ```typescript
 const formData = new FormData()
 formData.append('file', file)
+formData.append('filename', file.name)
 
 // 自动移除 Content-Type，让浏览器设置 multipart/form-data
 await http.post('/upload', formData)
 ```
+
+#### 直接上传二进制
+
+如果后端要求请求体就是单个文件，而不是 `multipart/form-data`，可以直接传 `File` / `Blob` / `ArrayBuffer`，并按后端约定设置 `Content-Type`。
+
+```typescript
+await http.request('/upload/raw', {
+  method: 'POST',
+  body: file,
+  headers: {
+    'Content-Type': file.type || 'application/octet-stream',
+  },
+})
+```
+
+常见选择：
+- 表单上传、多字段上传：使用 `FormData`，不要设置 `Content-Type`。
+- 单文件原始 body：使用文件 MIME，如 `image/png`，或兜底 `application/octet-stream`。
+- 后端要求签名直传、对象存储 PUT：严格使用服务端签名约定的 `Content-Type`。
+
+#### 上传进度
+
+本库不再封装一层进度 API，直接透传 ky 原生 `onUploadProgress`。该能力依赖 request streams；在不支持的浏览器 / 运行时里回调可能不会触发。
+
+```typescript
+await http.post('/upload', formData, {
+  onUploadProgress: (progress) => {
+    console.log(progress.percent, progress.transferredBytes, progress.totalBytes)
+  },
+})
+```
+
+如果业务必须兼容所有浏览器并稳定显示上传进度，可在该上传入口使用 `XMLHttpRequest` 实现；其他接口仍继续使用 kk-request。更多示例见 [`examples/upload.ts`](./examples/upload.ts)。
 
 ### 请求取消
 
@@ -313,7 +454,7 @@ const text = await http.raw.get('/markdown').text()
 #### 高层 API：一步完成请求 + 消费
 
 ```typescript
-import { createClient, createSSEStream } from '@kkfive/request'
+import { createClient } from '@kkfive/request'
 
 const client = createClient({
   prefix: 'https://api.openai.com/v1',
@@ -321,7 +462,7 @@ const client = createClient({
 })
 
 // Async iteration 模式
-const stream = createSSEStream(client.raw, '/chat/completions', {
+const stream = client.sse('/chat/completions', {
   model: 'gpt-4',
   messages: [{ role: 'user', content: 'Hello' }],
   stream: true,
@@ -336,7 +477,7 @@ for await (const event of stream) {
 #### Emitter 模式：多监听器
 
 ```typescript
-const stream = createSSEStream(client.raw, '/chat/completions', body)
+const stream = client.sse('/chat/completions', body)
 
 stream
   .on('data', (event) => {
@@ -354,16 +495,19 @@ await stream.done
 
 #### 底层 API：接收已有 Response
 
-用于需要自定义请求参数的场景。
+高级 API，用于已经拿到 `Response` 的场景，例如自行 `fetch`、第三方 SDK 返回 `Response`，或测试 fixture。发起 SSE 请求优先使用 `client.sse()`。
 
 ```typescript
 import { createSSEStreamFromResponse } from '@kkfive/request'
 
-// 自定义请求参数
-const response = await client.raw('sse/chat', {
+const response = await fetch('/sse/chat', {
   method: 'POST',
-  headers: { 'X-Custom': 'value' },
-  json: { messages },
+  headers: {
+    'Accept': 'text/event-stream',
+    'Content-Type': 'application/json',
+    'X-Custom': 'value',
+  },
+  body: JSON.stringify({ messages }),
 })
 
 const stream = createSSEStreamFromResponse(response)
@@ -383,7 +527,6 @@ for await (const event of stream) {
 | `timeout` | `number` | - | 超时时间（ms） |
 | `method` | `string` | `'POST'` | HTTP 方法 |
 | `headers` | `Record<string, string>` | - | 额外 headers |
-| `body` | `unknown` | - | 请求体 |
 
 ## 配合 @tanstack/query
 
@@ -452,6 +595,7 @@ function CreateUser() {
 | `prefix` | `string` | - | 请求 URL 前缀（ky 2.0，取代旧的 `prefixUrl`） |
 | `timeout` | `number` | `10000` | 超时时间（毫秒） |
 | `headers` | `Record<string, string>` | - | 请求头 |
+| `onUploadProgress` | `(progress, chunk) => void` | - | 上传进度回调（ky 原生能力，依赖运行时支持） |
 | `responseParser` | `ResponseParserOptions` | - | 响应解析配置 |
 | `auth` | `AuthOptions` | - | 认证配置 |
 | `getHeaders` | `() => Record<string, string>` | - | 动态获取额外 headers |
@@ -513,12 +657,40 @@ const user = await http.get('/users/1', { schema: userSchema }) // => 推导自 
 | `signal` | `AbortSignal` | 取消信号 |
 | `params` | `Record<string, any>` | URL 查询参数 |
 | `paramsSerializer` | `'brackets' \| 'comma' \| 'indices' \| 'repeat'` | 参数序列化方式 |
+| `onUploadProgress` | `(progress, chunk) => void` | 上传进度回调（ky 原生能力） |
 
 ## 依赖
 
 - [ky](https://github.com/sindresorhus/ky) - HTTP 客户端
 - [qs](https://github.com/ljharb/qs) - 查询字符串解析
 - [parse-sse](https://github.com/sindresorhus/parse-sse) - SSE 流解析
+
+## 发布验证
+
+发布前执行：
+
+```bash
+pnpm verify
+```
+
+该命令会依次运行类型检查、lint、测试、覆盖率、构建和 npm tarball smoke test。tarball smoke test 会验证打包内容，并在临时项目中检查 ESM 和 TypeScript 类型导入。
+
+## 发布流程
+
+本项目通过 GitHub Actions 发布：推送 `v*` tag 后，`.github/workflows/release.yml` 会生成 GitHub Release notes 并发布 npm 包。
+
+`CHANGELOG.md` 不在 tag workflow 中回推，避免 tag 与仓库提交不一致。发布前如需更新本地 changelog：
+
+```bash
+pnpm changelog
+```
+
+如需在本地准备版本号、tag 与 changelog：
+
+```bash
+pnpm release:prepare
+git push --follow-tags
+```
 
 ## License
 

@@ -1,4 +1,5 @@
 import type { KyInstance } from 'ky'
+import type { RequestConfig } from '../types'
 import type {
   SSEStream as ISSEStream,
   SSECloseHandler,
@@ -7,6 +8,7 @@ import type {
   SSEEvent,
   SSEEventHandler,
   SSEFromResponseOptions,
+  SSERequestConfig,
 } from './types'
 import { parseServerSentEvents } from 'parse-sse'
 
@@ -19,7 +21,7 @@ interface ListenerMap<T> {
 type ConsumeFn = () => Promise<void>
 
 /**
- * SSE 流对象。由 {@link createSSEStream} / {@link createSSEStreamFromResponse} 创建，
+ * SSE 流对象。由 `client.sse()` / {@link createSSEStreamFromResponse} 创建，
  * 一般不直接 `new`。支持两种消费方式，二选一（流只能被消费一次）：
  * - **async iteration**：`for await (const event of stream) { ... }`
  * - **emitter**：`stream.on('data' | 'error' | 'close', handler)`，配合 `await stream.done`
@@ -176,22 +178,25 @@ class SSEStream<T = unknown> implements ISSEStream<T> {
   /**
    * 使用 ky 实例发起请求并消费 SSE 流
    */
-  async consumeFromKy(kyInstance: KyInstance, url: string, config?: SSEConfig): Promise<void> {
+  async consumeFromKy(kyInstance: KyInstance, url: string, config?: SSERequestConfig): Promise<void> {
     try {
       let resolvedUrl = url
       if (resolvedUrl.startsWith('/'))
         resolvedUrl = resolvedUrl.slice(1)
 
-      const response = await kyInstance(resolvedUrl, {
+      const requestConfig: RequestConfig = {
         method: config?.method ?? 'POST',
         json: config?.body,
         headers: {
           Accept: 'text/event-stream',
           ...config?.headers,
         },
+        responseParser: { responseReturn: 'raw' },
         signal: this.abortController.signal,
         timeout: config?.timeout ?? false,
-      })
+      }
+
+      const response = await kyInstance(resolvedUrl, requestConfig)
 
       await this.consumeFromResponse(response)
     }
@@ -293,7 +298,8 @@ class SSEStream<T = unknown> implements ISSEStream<T> {
 /**
  * 从一个已有的 `Response` 创建可消费的 SSE 流（底层 API）。
  *
- * 适用于需要完全自定义请求参数的场景：先自行用 `client.raw(...)` 拿到 `Response`，再交给本函数解析。
+ * 适用于已经有 `Response` 的高级场景：自行 `fetch`、第三方 SDK 返回 Response、
+ * 或测试 fixture，然后交给本函数解析。
  *
  * @param response 一个 `text/event-stream` 的 Response（body 可读）
  * @param options SSE 解析配置：`parser` / `doneSignal` / `signal`
@@ -301,10 +307,10 @@ class SSEStream<T = unknown> implements ISSEStream<T> {
  * ```typescript
  * import { createSSEStreamFromResponse } from '@kkfive/request'
  *
- * const response = await client.raw('sse/chat', {
+ * const response = await fetch('/sse/chat', {
  *   method: 'POST',
  *   headers: { 'X-Custom': 'value' },
- *   json: { messages },
+ *   body: JSON.stringify({ messages }),
  * })
  * const stream = createSSEStreamFromResponse(response)
  * for await (const event of stream)
@@ -323,39 +329,12 @@ function createSSEStreamFromResponse<T = unknown>(
 // --- 高层：封装 ky 请求 ---
 
 /**
- * 发起 SSE 请求并返回可消费的流（高层 API：一步完成请求 + 消费）。
+ * 发起 SSE 请求并返回可消费的流（内部 API）。
  *
- * 支持两种消费模式，二选一（流只能被消费一次）：
- * - **async iteration**：`for await (const event of stream)`
- * - **emitter**：`stream.on('data' | 'error' | 'close', handler)`，配合 `await stream.done`
- *
- * @param kyInstance 底层 ky 实例，通常传 `client.raw`
- * @param url 请求地址（相对实例的 `prefix`）
- * @param data 请求体，默认以 JSON 发送（方法默认 `POST`）
- * @param config SSE 配置：`parser` / `doneSignal` / `signal` / `timeout` / `method` / `headers`
- * @example
- * ```typescript
- * import { createClient, createSSEStream } from '@kkfive/request'
- *
- * const client = createClient({ prefix: 'https://api.openai.com/v1', auth: { getToken: () => 'sk-xxx' } })
- *
- * // 模式一：async iteration
- * const stream = createSSEStream(client.raw, '/chat/completions', {
- *   model: 'gpt-4',
- *   messages: [{ role: 'user', content: 'Hello' }],
- *   stream: true,
- * })
- * for await (const event of stream)
- *   process.stdout.write(event.data?.choices?.[0]?.delta?.content ?? '')
- *
- * // 模式二：emitter（多监听器）
- * createSSEStream(client.raw, '/chat/completions', body)
- *   .on('data', e => render(e.data))
- *   .on('error', err => report(err))
- *   .on('close', () => cleanup())
- * ```
+ * 公共入口是 `client.sse(url, data, config)`；不要把 `client.raw` 暴露给用户作为
+ * SSE 请求入口，否则调用方会被实例级 responseParser / schema 等普通 JSON 请求语义影响。
  */
-function createSSEStream<T = unknown>(
+function createSSEStreamForClient<T = unknown>(
   kyInstance: KyInstance,
   url: string,
   data?: unknown,
@@ -370,14 +349,4 @@ function createSSEStream<T = unknown>(
   return stream
 }
 
-// --- 快捷函数 ---
-
-/**
- * {@link createSSEStream} 的简写别名，参数与行为完全一致。
- * @see {@link createSSEStream}
- */
-function sse<T = unknown>(kyInstance: KyInstance, url: string, data?: unknown, config?: SSEConfig): ISSEStream<T> {
-  return createSSEStream<T>(kyInstance, url, data, config)
-}
-
-export { createSSEStream, createSSEStreamFromResponse, sse, SSEStream }
+export { createSSEStreamForClient, createSSEStreamFromResponse, SSEStream }

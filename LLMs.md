@@ -27,10 +27,12 @@
 | 配 auth + 401 刷新 | [README → Refresh Token 自动刷新](README.md#refresh-token-自动刷新) |
 | 选响应模式（raw/body/data） | [README → 响应解析](README.md#响应解析) |
 | 区分 BusinessError / 传输错误 | [README → 错误处理](README.md#错误处理) |
+| 文件上传 / 上传进度 | [README → 文件上传](README.md#文件上传) · [`examples/upload.ts`](examples/upload.ts) |
 | SSE 流式 | [README → SSE 流式请求](README.md#sse-流式请求) |
-| schema 校验响应（zod/valibot…） | [README → Schema 校验](README.md#schema-校验) · [`examples/index.ts`](examples/index.ts) |
+| schema 校验响应（zod/valibot…） | [README → Schema 校验](README.md#schema-校验) · [`examples/schema-validation.ts`](examples/schema-validation.ts) |
 | 完整 API 全表 | [README → API 参考](README.md#api-参考) |
 | 可运行示例 | [`examples/index.ts`](examples/index.ts) |
+| 按主题读示例 | [`examples/basic.ts`](examples/basic.ts) · [`examples/auth-refresh.ts`](examples/auth-refresh.ts) · [`examples/response-modes.ts`](examples/response-modes.ts) · [`examples/error-handling.ts`](examples/error-handling.ts) · [`examples/upload.ts`](examples/upload.ts) · [`examples/sse.ts`](examples/sse.ts) · [`examples/schema-validation.ts`](examples/schema-validation.ts) |
 | 浓缩用法卡（外部消费 AI） | [`llms.txt`](llms.txt) |
 
 ---

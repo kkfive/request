@@ -224,11 +224,13 @@ export function startServer(): Promise<string> {
         }
         catch {}
 
-        const chunks = parsed.chunks || [
-          { choices: [{ delta: { content: 'Hello' } }] },
-          { choices: [{ delta: { content: ' world' } }] },
-          { choices: [{ delta: { content: '!' } }] },
-        ]
+        const chunks = (url.searchParams.has('echoRequest') || parsed.echoRequest)
+          ? [{ method, body: body ? parsed : null }]
+          : parsed.chunks || [
+            { choices: [{ delta: { content: 'Hello' } }] },
+            { choices: [{ delta: { content: ' world' } }] },
+            { choices: [{ delta: { content: '!' } }] },
+          ]
 
         res.setHeader('Content-Type', 'text/event-stream')
         res.setHeader('Cache-Control', 'no-cache')
@@ -262,6 +264,23 @@ export function startServer(): Promise<string> {
         res.statusCode = 200
 
         res.write(`data: ${JSON.stringify({ authorization, customHeader })}\n\n`)
+        res.write('data: [DONE]\n\n')
+        res.end()
+      }
+      else if (url.pathname === '/sse/protected') {
+        const authorization = req.headers.authorization || ''
+        if (!authorization.includes('new-token')) {
+          res.statusCode = 401
+          res.end(JSON.stringify({ message: '未授权或登录已过期' }))
+          return
+        }
+
+        res.setHeader('Content-Type', 'text/event-stream')
+        res.setHeader('Cache-Control', 'no-cache')
+        res.setHeader('Connection', 'keep-alive')
+        res.statusCode = 200
+
+        res.write(`data: ${JSON.stringify({ authorization, status: 'ok' })}\n\n`)
         res.write('data: [DONE]\n\n')
         res.end()
       }

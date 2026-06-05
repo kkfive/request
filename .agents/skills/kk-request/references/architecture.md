@@ -23,7 +23,7 @@ src/
 │   └── unauthorized.ts     # 401 处理和 token 刷新重试
 ├── sse/
 │   ├── index.ts            # 桶导出
-│   ├── stream.ts           # SSE 流式请求（SSEStream 类 + 工厂函数）
+│   ├── stream.ts           # SSE 流式请求（SSEStream 类 + client 内部工厂 + Response 解析）
 │   └── types.ts            # SSE 类型（与实现就近）
 ├── types/
 │   ├── index.ts            # 桶导出
@@ -47,6 +47,7 @@ src/
 
 **关键方法**：
 - `get/post/put/patch/delete` - HTTP 方法
+- `sse` - SSE 流式请求（一等 API，内部强制 raw Response）
 - `request` - 通用请求方法
 - `raw` getter - 暴露底层 ky 实例（用于特殊场景）
 

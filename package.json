@@ -24,32 +24,33 @@
   ],
   "sideEffects": false,
   "exports": {
-    ".": {
-      "types": "./dist/index.d.mts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs"
-    },
+    ".": "./dist/index.mjs",
     "./package.json": "./package.json"
   },
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
   "files": [
     "dist",
     "examples",
     "llms.txt"
   ],
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "build": "unbuild",
-    "dev": "unbuild --stub",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
-    "prepublishOnly": "nr build",
-    "release": "bumpp && pnpm publish",
+    "prepublishOnly": "pnpm verify",
+    "changelog": "changelogen --output CHANGELOG.md",
+    "release:prepare": "bumpp --execute \"pnpm changelog\"",
     "start": "tsx src/index.ts",
     "start:example": "tsx examples/index.ts",
     "test": "vitest --run",
+    "test:coverage": "vitest --run --coverage",
+    "test:pack": "tsx scripts/test-pack.ts",
     "typecheck": "tsc --noEmit",
+    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm test:coverage && pnpm build && pnpm test:pack",
     "prepare": "simple-git-hooks",
     "update:deps": "npx taze -r -w"
   },
@@ -66,13 +67,16 @@
     "@types/qs": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "bumpp": "catalog:cli",
+    "changelogen": "catalog:cli",
     "eslint": "catalog:cli",
     "lint-staged": "catalog:cli",
+    "publint": "catalog:",
     "simple-git-hooks": "catalog:cli",
     "tinyexec": "catalog:utils",
+    "tsdown": "catalog:",
+    "tsdown-stale-guard": "catalog:",
     "tsx": "catalog:cli",
     "typescript": "catalog:cli",
-    "unbuild": "catalog:cli",
     "vite": "catalog:cli",
     "vitest": "catalog:testing",
     "vitest-package-exports": "catalog:testing",
