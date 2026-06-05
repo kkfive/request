@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-06-05
+
+### Added
+- 新增客户端级 SSE 方法，支持直接通过 request client 发起流式请求。
+- 上传请求透传进度事件类型，便于消费方获得类型安全的上传进度回调。
+
+### Fixed
+- 修复 FormData 请求头处理，避免自动设置不合适的 `Content-Type`。
+- 修复 clean checkout 场景下的类型检查问题，确保全新检出后验证链路可直接运行。
+
+### Changed
+- 更新构建、发布与打包验证链路，补充 npm tarball smoke test。
+- 拆分示例文件并补充上传、发布与兼容性说明。
+- 增强 hook 生命周期顺序、SSE 请求体、mock 状态隔离等测试覆盖。
+
 ## [0.5.0] - 2026-06-02
 
 ### Added
