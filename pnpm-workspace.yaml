@@ -10,7 +10,7 @@ minimumReleaseAgeExclude:
   - vitest@4.1.8
 shellEmulator: true
 
-trustPolicy: no-downgrade
+trustPolicy: off
 
 packages:
   - playground

@@ -13,6 +13,9 @@ export default antfu(
       'CLAUDE.md',
       '**/docs',
     ],
+    rules: {
+      'pnpm/yaml-enforce-settings': 'off',
+    },
   },
   {
     files: ['examples/**/*.ts'],
